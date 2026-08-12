@@ -100,6 +100,14 @@ def test_cookie_de_sessao_e_httponly(deslogado, monkeypatch):
     assert "secure" in cabecalho
 
 
+def test_sem_config_do_supabase_diz_o_que_falta(deslogado):
+    """Deploy sem as variaveis na Vercel: mensagem acionavel, nao stack trace."""
+    resposta = deslogado.post("/login", data={"email": "a@b.c", "senha": "x"})
+
+    assert resposta.status_code == 200
+    assert "SUPABASE_URL" in resposta.text
+
+
 # ------------------------------------------------------------------ briefing
 
 def test_briefing_vazio_convida_a_gerar(logado):
