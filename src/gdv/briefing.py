@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .blocos import MatrizBlocos
-from .catalogo import Catalogo
+from .protocolo import ProtocoloCatalogo
 from .modelos import EIXOS, Combinacao, PacoteCriativo, Produto, RegistroVideo
 from .redator import Redator
 from .sorteio import sortear_lote
@@ -47,7 +47,7 @@ def selecionar_produtos(
 
 
 def montar(
-    catalogo: Catalogo,
+    catalogo: ProtocoloCatalogo,
     matriz: MatrizBlocos,
     redator: Redator,
     data: str,
@@ -69,22 +69,36 @@ def montar(
     for indice, (produto, combinacao) in enumerate(zip(produtos, combinacoes)):
         pacote = redator.redigir(produto, combinacao, data)
         itens.append(ItemBriefing(produto=produto, combinacao=combinacao, pacote=pacote))
-        registros.append(
-            RegistroVideo(
-                id=str(proximo + indice),
-                sku=produto.sku,
-                data=data,
-                combinacao_hash=combinacao.hash,
-                blocos_json=json.dumps(combinacao.ids(), sort_keys=True, ensure_ascii=False),
-                gancho=pacote.gancho,
-                legenda=pacote.legenda,
-                hashtags=" ".join(f"#{t}" for t in pacote.hashtags),
-                arquivo=pacote.nome_arquivo,
-                status="briefado",
-            )
-        )
+        registros.append(registro_de(produto, combinacao, pacote, data, str(proximo + indice)))
 
     return itens, registros
+
+
+def registro_de(
+    produto: Produto,
+    combinacao: Combinacao,
+    pacote: PacoteCriativo,
+    data: str,
+    video_id: str,
+) -> RegistroVideo:
+    """Converte o resultado do sorteio + redacao numa linha de catalogo.
+
+    Extraido para que o site e a CLI montem o registro exatamente igual. No
+    backend Supabase o `video_id` e ignorado — quem numera e a identity.
+    """
+    return RegistroVideo(
+        id=video_id,
+        sku=produto.sku,
+        data=data,
+        combinacao_hash=combinacao.hash,
+        blocos_json=json.dumps(combinacao.ids(), sort_keys=True, ensure_ascii=False),
+        gancho=pacote.gancho,
+        legenda=pacote.legenda,
+        hashtags=" ".join(f"#{t}" for t in pacote.hashtags),
+        prompt=pacote.prompt_veo,
+        arquivo=pacote.nome_arquivo,
+        status="briefado",
+    )
 
 
 def renderizar(itens: Sequence[ItemBriefing], registros: Sequence[RegistroVideo], data: str) -> str:

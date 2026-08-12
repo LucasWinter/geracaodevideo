@@ -86,5 +86,8 @@ class RegistroVideo:
     hashtags: str
     arquivo: str
     status: str
+    # O prompt fica no registro, nao so no markdown do dia: e o que o site
+    # mostra no botao de copiar, e o que permite reabrir um briefing antigo.
+    prompt: str = ""
     views: str = ""
     gmv: str = ""

@@ -14,7 +14,8 @@ from . import blocos as mod_blocos
 from . import briefing as mod_briefing
 from . import diagnostico as mod_diagnostico
 from . import montagem as mod_montagem
-from .catalogo import Catalogo, ErroCatalogo
+from .backend import abrir_catalogo
+from .catalogo import ErroCatalogo
 from .modelos import STATUS_VIDEO
 from .redator import criar_redator
 from .sorteio import EspacoCombinatorioEsgotado
@@ -33,7 +34,7 @@ def _carregar_dotenv(caminho: Path = Path(".env")) -> None:
 
 
 def cmd_briefing(args: argparse.Namespace) -> int:
-    catalogo = Catalogo(args.dados)
+    catalogo = abrir_catalogo(args.dados)
     matriz = mod_blocos.carregar(Path(args.dados) / "blocos.yaml")
     redator = criar_redator(matriz.termos_proibidos, forcar_template=args.sem_llm)
 
@@ -54,18 +55,18 @@ def cmd_briefing(args: argparse.Namespace) -> int:
 
     if args.dry_run:
         print(texto)
-        print(f"[dry-run] nada gravado em {catalogo.caminho_videos}", file=sys.stderr)
+        print(f"[dry-run] nada gravado em {catalogo.rotulo}", file=sys.stderr)
         return 0
 
     caminho = mod_briefing.salvar(texto, data, args.saida)
     catalogo.registrar(registros)
     print(f"Briefing: {caminho}")
-    print(f"{len(registros)} vídeos registrados em {catalogo.caminho_videos}")
+    print(f"{len(registros)} vídeos registrados em {catalogo.rotulo}")
     return 0
 
 
 def cmd_montar(args: argparse.Namespace) -> int:
-    catalogo = Catalogo(args.dados)
+    catalogo = abrir_catalogo(args.dados)
 
     if args.id:
         alvos = [catalogo.buscar(args.id)]
@@ -98,7 +99,7 @@ def cmd_montar(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    registro = Catalogo(args.dados).marcar_status(args.id, args.novo_status)
+    registro = abrir_catalogo(args.dados).marcar_status(args.id, args.novo_status)
     print(f"[{registro.id}] {registro.arquivo} -> {registro.status}")
     return 0
 
@@ -138,7 +139,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_catalogo(args: argparse.Namespace) -> int:
-    catalogo = Catalogo(args.dados)
+    catalogo = abrir_catalogo(args.dados)
     contagens = catalogo.contagem_por_sku()
 
     print(f"{'SKU':<12} {'CAT':<12} {'PREÇO':>9} {'VÍDEOS':>7}  NOME")

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}gdv{% endblock %}</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+  {% if mostrar_nav is not defined or mostrar_nav %}
+  <header class="topo">
+    <nav>
+      <a href="/" class="marca">gdv</a>
+      <a href="/">Briefing</a>
+      <a href="/catalogo">Catálogo</a>
+      <a href="/blocos">Matriz</a>
+    </nav>
+    <form method="post" action="/logout"><button class="link">sair</button></form>
+  </header>
+  {% endif %}
+
+  <main>
+    {% block conteudo %}{% endblock %}
+  </main>
+
+  <script>
+    document.addEventListener('click', async (evento) => {
+      const botao = evento.target.closest('[data-copiar]');
+      if (!botao) return;
+      const alvo = document.getElementById(botao.dataset.copiar);
+      try {
+        await navigator.clipboard.writeText(alvo.innerText);
+        const antes = botao.textContent;
+        botao.textContent = 'copiado';
+        botao.classList.add('copiado');
+        setTimeout(() => { botao.textContent = antes; botao.classList.remove('copiado'); }, 1500);
+      } catch {
+        // clipboard exige contexto seguro; em http:// o usuario seleciona na mao
+        const selecao = window.getSelection();
+        const faixa = document.createRange();
+        faixa.selectNodeContents(alvo);
+        selecao.removeAllRanges();
+        selecao.addRange(faixa);
+      }
+    });
+  </script>
+</body>
+</html>

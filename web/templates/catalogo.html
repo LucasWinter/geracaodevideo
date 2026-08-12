@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}Catálogo{% endblock %}
+
+{% block conteudo %}
+<div class="cabecalho">
+  <h1>Catálogo</h1>
+  <a href="/produto/novo" class="primario botao">Novo produto</a>
+</div>
+
+{% if not produtos %}
+<p class="vazio">
+  Nenhum produto cadastrado. Sem produto ativo o briefing não roda — e sem foto
+  limpa na pasta do Drive, o frame inicial não sai bom.
+</p>
+{% else %}
+<div class="tabela-rolagem">
+  <table>
+    <thead>
+      <tr>
+        <th>SKU</th><th>Nome</th><th>Categoria</th>
+        <th class="num">Preço</th><th class="num">Vídeos</th>
+        <th>Fotos</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for produto in produtos %}
+      <tr>
+        <td><a href="/produto/{{ produto.sku }}">{{ produto.sku }}</a></td>
+        <td>{{ produto.nome }}</td>
+        <td>{{ produto.categoria }}</td>
+        <td class="num">R$ {{ '%.2f'|format(produto.preco) }}</td>
+        <td class="num">{{ contagens.get(produto.sku, 0) }}</td>
+        <td>
+          {% if produto.pasta_drive %}
+            <a href="{{ produto.pasta_drive }}" target="_blank" rel="noopener">abrir ↗</a>
+          {% else %}
+            <span class="alerta">sem pasta</span>
+          {% endif %}
+        </td>
+        <td><span class="etiqueta status-{{ produto.status }}">{{ produto.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

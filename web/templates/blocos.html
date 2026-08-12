@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Matriz de blocos{% endblock %}
+
+{% block conteudo %}
+<div class="cabecalho">
+  <h1>Matriz de blocos</h1>
+</div>
+
+<p class="vazio">
+  Só leitura. A matriz é versionada no repositório — para mudar, edite
+  <code>data/blocos.yaml</code> e faça deploy. Adicionar um valor aqui
+  multiplica o espaço de combinações sem tocar em código.
+</p>
+
+{% for eixo in eixos %}
+<article class="card">
+  <header><h2>{{ eixo }}</h2><span class="etiqueta">{{ matriz.eixos[eixo]|length }} valores</span></header>
+  <div class="tabela-rolagem">
+    <table>
+      <thead><tr><th>id</th><th>texto</th><th>categorias</th></tr></thead>
+      <tbody>
+        {% for valor in matriz.eixos[eixo] %}
+        <tr>
+          <td><code>{{ valor.id }}</code></td>
+          <td>{{ valor.texto }}</td>
+          <td>{{ valor.categorias|join(', ') if valor.categorias else 'todas' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endfor %}
+
+<article class="card">
+  <header><h2>Termos proibidos</h2></header>
+  <p class="discreto">
+    Filtro determinístico sobre tudo que o redator produz. Se o Gemini escorregar
+    num claim de eficácia, a saída é descartada e o template assume.
+  </p>
+  <p>{% for termo in matriz.termos_proibidos %}<span class="etiqueta">{{ termo }}</span> {% endfor %}</p>
+</article>
+{% endblock %}

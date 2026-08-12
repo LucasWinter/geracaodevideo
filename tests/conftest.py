@@ -12,6 +12,18 @@ from gdv.modelos import Produto
 RAIZ = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture(autouse=True)
+def ambiente_isolado(monkeypatch):
+    """Testes nao podem depender do .env da maquina.
+
+    `cli.main()` carrega o .env do diretorio atual; sem isto, quem tivesse
+    GDV_BACKEND=supabase configurado veria os testes de CLI tentarem a rede.
+    """
+    monkeypatch.setenv("GDV_BACKEND", "csv")
+    for variavel in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_EMAIL", "SUPABASE_SENHA"):
+        monkeypatch.delenv(variavel, raising=False)
+
+
 @pytest.fixture
 def matriz():
     return mod_blocos.carregar(RAIZ / "data" / "blocos.yaml")

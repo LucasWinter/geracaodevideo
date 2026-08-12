@@ -12,12 +12,13 @@ sorteado**. Cada combinação é hasheada e conferida contra as 30 últimas, ent
 
 | Etapa | Como |
 |---|---|
-| Catálogo de produtos e log de vídeos | `data/*.csv` |
-| Sorteio da combinação + anti-repetição | `gdv briefing` |
-| Redação do prompt, gancho, legenda, hashtags | `gdv briefing` (Gemini, com fallback offline) |
+| Catálogo de produtos e log de vídeos | Supabase (ou `data/*.csv`) |
+| Cadastro de produtos | painel web |
+| Sorteio da combinação + anti-repetição | painel web ou `gdv briefing` |
+| Redação do prompt, gancho, legenda, hashtags | idem (Gemini, com fallback offline) |
 | Frame inicial no Nano Banana | **manual** |
 | Geração do vídeo no Flow | **manual** |
-| Montagem, diferenciação e export 1080×1920 | `gdv montar` |
+| Montagem, diferenciação e export 1080×1920 | `gdv montar` — **local** |
 | Postagem | **manual**, pelo TikTok Studio |
 
 Frame e geração continuam manuais de propósito: são os passos que exigem olho humano, e crédito de
@@ -36,11 +37,10 @@ brew install ffmpeg             # macOS
 sudo apt install ffmpeg         # Linux
 
 # 2. o pacote
-pip install -e ".[dev]"         # núcleo + testes
-pip install -e ".[gemini]"      # opcional: redação via Gemini
+pip install -e ".[dev,web,supabase,gemini]"
 
 # 3. configuração
-cp .env.example .env            # e edite: GEMINI_API_KEY e GDV_FONTE
+cp .env.example .env            # Supabase, GEMINI_API_KEY e GDV_FONTE
 
 # 4. confira o que ainda falta
 gdv doctor
@@ -59,24 +59,25 @@ Duas coisas são opcionais e degradam em silêncio se você não configurar:
 
 ## Fluxo diário
 
-```bash
-# 1. de manhã — gera o briefing e registra os 5 vídeos no log
-gdv briefing --qtd 5
+O painel web cobre a parte diária; o terminal cobre a montagem, que precisa de
+ffmpeg e por isso não roda em serverless.
 
-# 2. abra saida/briefing/AAAA-MM-DD.md. Para cada vídeo:
-#    - monte o frame inicial no Nano Banana: foto real do produto no cenário indicado
-#    - valide o frame antes de gastar crédito de vídeo
-#    - cole o prompt no Flow, gere, e baixe para entrada/ com o nome indicado no briefing
-
-# 3. marque o que já baixou
-gdv status 1 gerado
-
-# 4. monte tudo que está pronto
-gdv montar
-
-# 5. suba os arquivos de saida/videos/ no TikTok Studio, anexe o produto, agende
-gdv status 1 postado
 ```
+1. abra o painel  →  "Gerar briefing de hoje"
+2. para cada card: monte o frame inicial no Nano Banana com a foto real do
+   produto no cenário indicado, valide o frame, cole o prompt no Flow, gere,
+   e baixe para entrada/ com o nome que o card mostra
+3. no terminal:  gdv status 1 gerado
+4. no terminal:  gdv montar
+5. suba saida/videos/ no TikTok Studio, anexe o produto, agende
+6. no terminal:  gdv status 1 postado
+```
+
+O painel tem três telas: **Briefing** (cards do dia com botão de copiar prompt,
+gancho e legenda), **Catálogo** (cadastro de produtos) e **Matriz** (a matriz de
+blocos, só leitura).
+
+Prefere terminal? `gdv briefing --qtd 5` faz o mesmo, contra o mesmo banco.
 
 ### Comandos
 
@@ -91,10 +92,51 @@ gdv catalogo
 `--dry-run` imprime sem gravar no log. `--seed` fixa o sorteio: mesmo seed, mesmo briefing — é assim
 que você reproduz um dia.
 
+## O painel web
+
+FastAPI + Jinja2 na Vercel, com Supabase (Postgres + Auth) como fonte de verdade.
+Sem npm, sem build step.
+
+O site reusa o motor da CLI — `gdv.sorteio`, `gdv.blocos`, `gdv.redator` — em vez
+de reimplementar o sorteio em JavaScript. Isso não é preferência de linguagem:
+`hash_combinacao()` precisa dar exatamente o mesmo valor nos dois lugares, senão a
+janela anti-repetição de um não enxerga o que o outro gerou.
+
+### Rodar local
+
+```bash
+pip install -e ".[dev,web,supabase]"
+uvicorn web.main:app --reload
+```
+
+### Deploy
+
+O `vercel.json` já manda tudo para `api/index.py` e fixa `maxDuration: 60` — a
+geração dispara N chamadas ao Gemini em paralelo, e sequencial estouraria o limite.
+
+Variáveis obrigatórias no projeto da Vercel:
+
+| Variável | Para quê |
+|---|---|
+| `SUPABASE_URL` | endereço do projeto |
+| `SUPABASE_ANON_KEY` | chave pública; a RLS é quem protege os dados |
+| `GEMINI_API_KEY` | opcional — sem ela o site redige por template |
+
+`SUPABASE_EMAIL` e `SUPABASE_SENHA` **não** vão para a Vercel: no site quem
+autentica é você, pelo formulário de login. Elas só existem no `.env` local, para
+a CLI.
+
+### Segurança
+
+RLS ligada nas duas tabelas, com acesso apenas para `authenticated` — visitante
+anônimo não lê nada, e margem, GMV e link de fornecedor são privados. Não existe
+service-role key em lugar nenhum do projeto. A sessão vive em cookies httpOnly +
+Secure.
+
 ## Os arquivos que você vai editar
 
-**`data/produtos.csv`** — um SKU por linha. Só `status=ativo` entra no sorteio. `pasta_drive` é o link
-da pasta com 4–8 fotos limpas do produto; `angulos` é separado por `;`.
+**Produtos** — pela tela de Catálogo do painel. Só `status=ativo` entra no sorteio, e `pasta_drive`
+é o link da pasta com 4–8 fotos limpas do produto.
 
 > Sem foto de produto boa, nada disso funciona. Foto de fornecedor com marca d'água ou fundo poluído
 > derruba a qualidade do image-to-video.
@@ -110,8 +152,10 @@ Dois cuidados:
 - Use `categorias:` para restringir um valor — sem isso, "provando no espelho" seria sorteado para uma
   caneca.
 
-**`data/videos.csv`** — log append-only, escrito pelo pipeline. As colunas `views` e `gmv` estão
-reservadas para o loop de feedback e hoje ficam vazias.
+**Log de vídeos** — escrito pelo pipeline, nunca à mão. As colunas `views` e `gmv` estão reservadas
+para o loop de feedback e hoje ficam vazias.
+
+Os arquivos em `data/*.csv` só são usados com `GDV_BACKEND=csv`, o modo offline.
 
 ## Claims proibidos
 

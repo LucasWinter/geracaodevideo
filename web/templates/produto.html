@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block titulo %}{{ produto.sku if produto else 'Novo produto' }}{% endblock %}
+
+{% block conteudo %}
+<div class="cabecalho">
+  <h1>{{ produto.sku if produto else 'Novo produto' }}</h1>
+  <a href="/catalogo" class="botao">Voltar</a>
+</div>
+
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+
+<form method="post" action="/produto" class="formulario">
+  <label>
+    SKU
+    <input name="sku" value="{{ produto.sku if produto else '' }}"
+           {% if produto %}readonly{% endif %} required>
+    <small>identificador curto, entra no nome do arquivo do vídeo</small>
+  </label>
+
+  <label>
+    Nome
+    <input name="nome" value="{{ produto.nome if produto else '' }}" required>
+    <small>vai literal para o prompt — escreva como o produto é de verdade</small>
+  </label>
+
+  <label>
+    Categoria
+    <input name="categoria" value="{{ produto.categoria if produto else '' }}" required>
+    <small>controla quais blocos podem ser sorteados (ex.: bolsas, casa)</small>
+  </label>
+
+  <div class="dupla">
+    <label>
+      Preço
+      <input name="preco" type="number" step="0.01" min="0"
+             value="{{ '%.2f'|format(produto.preco) if produto else '0.00' }}">
+    </label>
+    <label>
+      Margem
+      <input name="margem" type="number" step="0.01" min="0" max="1"
+             value="{{ '%.2f'|format(produto.margem) if produto else '0.00' }}">
+      <small>fração, ex.: 0.42</small>
+    </label>
+  </div>
+
+  <label>
+    Link do Shop
+    <input name="link_shop" type="url" value="{{ produto.link_shop if produto else '' }}">
+  </label>
+
+  <label>
+    Pasta de fotos no Drive
+    <input name="pasta_drive" type="url" value="{{ produto.pasta_drive if produto else '' }}">
+    <small>4–8 fotos limpas. É o insumo do frame inicial no Nano Banana.</small>
+  </label>
+
+  <label>
+    Ângulos
+    <input name="angulos" value="{{ produto.angulos|join(';') if produto else '' }}">
+    <small>separados por ponto e vírgula: frontal;lateral;detalhe-fecho</small>
+  </label>
+
+  <label>
+    Status
+    <select name="status">
+      {% for opcao in status_validos %}
+      <option value="{{ opcao }}"
+        {% if produto and produto.status == opcao %}selected{% endif %}>{{ opcao }}</option>
+      {% endfor %}
+    </select>
+    <small>só <code>ativo</code> entra no sorteio do briefing</small>
+  </label>
+
+  <button class="primario">Salvar</button>
+</form>
+{% endblock %}

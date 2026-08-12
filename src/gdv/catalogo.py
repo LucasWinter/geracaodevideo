@@ -35,6 +35,7 @@ COLUNAS_VIDEOS = [
     "gancho",
     "legenda",
     "hashtags",
+    "prompt",
     "arquivo",
     "status",
     "views",
@@ -51,6 +52,10 @@ class Catalogo:
         self.diretorio = Path(diretorio)
         self.caminho_produtos = self.diretorio / "produtos.csv"
         self.caminho_videos = self.diretorio / "videos.csv"
+
+    @property
+    def rotulo(self) -> str:
+        return str(self.caminho_videos)
 
     # ---------------------------------------------------------------- produtos
 

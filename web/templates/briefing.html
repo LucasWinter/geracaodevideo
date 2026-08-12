@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block titulo %}Briefing {{ dia }}{% endblock %}
+
+{% block conteudo %}
+<div class="cabecalho">
+  <h1>Briefing <span class="dia">{{ dia }}</span></h1>
+  {% if not videos %}
+  <form method="post" action="/briefing" class="gerar">
+    <label>quantos <input type="number" name="qtd" value="5" min="1" max="20"></label>
+    <button class="primario">Gerar briefing de hoje</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+
+{% if not videos %}
+  <p class="vazio">
+    Nenhum vídeo para {{ dia }}. Gere o briefing acima — o sorteio evita as
+    últimas 30 combinações, então nada repete.
+  </p>
+{% endif %}
+
+{% for video in videos %}
+{% set produto = produtos.get(video.sku) %}
+<article class="card">
+  <header>
+    <h2>{{ produto.nome if produto else video.sku }}</h2>
+    <span class="etiqueta">{{ video.sku }}</span>
+    <span class="etiqueta status-{{ video.status }}">{{ video.status }}</span>
+    <span class="etiqueta hash">{{ video.combinacao_hash }}</span>
+  </header>
+
+  <ul class="meta">
+    {% if produto and produto.pasta_drive %}
+    <li><a href="{{ produto.pasta_drive }}" target="_blank" rel="noopener">Fotos do produto ↗</a></li>
+    {% endif %}
+    <li>Salvar como <code>{{ video.arquivo }}</code></li>
+  </ul>
+
+  <div class="bloco">
+    <div class="bloco-topo">
+      <span>Prompt (Flow / Veo)</span>
+      <button data-copiar="prompt-{{ video.id }}">copiar</button>
+    </div>
+    <pre id="prompt-{{ video.id }}">{{ video.prompt }}</pre>
+  </div>
+
+  <div class="bloco">
+    <div class="bloco-topo">
+      <span>Gancho na tela</span>
+      <button data-copiar="gancho-{{ video.id }}">copiar</button>
+    </div>
+    <pre id="gancho-{{ video.id }}">{{ video.gancho }}</pre>
+  </div>
+
+  <div class="bloco">
+    <div class="bloco-topo">
+      <span>Legenda + hashtags</span>
+      <button data-copiar="legenda-{{ video.id }}">copiar</button>
+    </div>
+    <pre id="legenda-{{ video.id }}">{{ video.legenda }}
+
+{{ video.hashtags }}</pre>
+  </div>
+
+  <details>
+    <summary>Blocos sorteados</summary>
+    <pre class="discreto">{{ video.blocos_json }}</pre>
+  </details>
+</article>
+{% endfor %}
+
+{% if videos %}
+<p class="rodape">
+  Depois de baixar os clipes do Flow para <code>entrada/</code> com o nome
+  indicado, rode no terminal: <code>gdv status &lt;id&gt; gerado</code> e
+  <code>gdv montar</code>. A montagem é local — ffmpeg não roda no site.
+</p>
+{% endif %}
+{% endblock %}

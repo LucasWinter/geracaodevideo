@@ -19,8 +19,10 @@ from pathlib import Path
 
 from . import blocos as mod_blocos
 from . import montagem as mod_montagem
+from .backend import abrir_catalogo, backend_ativo
 from .briefing import JANELA_PADRAO
-from .catalogo import Catalogo, ErroCatalogo
+from .catalogo import ErroCatalogo
+from .protocolo import ProtocoloCatalogo
 
 OK, AVISO, ERRO = "ok", "aviso", "erro"
 
@@ -60,7 +62,7 @@ def checar_ffmpeg() -> Checagem:
     return Checagem("ffmpeg", OK, "ffmpeg e ffprobe no PATH")
 
 
-def checar_produtos(catalogo: Catalogo) -> list[Checagem]:
+def checar_produtos(catalogo: ProtocoloCatalogo) -> list[Checagem]:
     try:
         produtos = catalogo.produtos()
     except ErroCatalogo as exc:
@@ -69,7 +71,7 @@ def checar_produtos(catalogo: Catalogo) -> list[Checagem]:
                 "produtos",
                 ERRO,
                 str(exc),
-                f"confira o cabecalho e as colunas de {catalogo.caminho_produtos}",
+                f"confira as colunas em {catalogo.rotulo}",
             )
         ]
 
@@ -79,7 +81,7 @@ def checar_produtos(catalogo: Catalogo) -> list[Checagem]:
             Checagem(
                 "produtos",
                 ERRO,
-                f"nenhum produto com status=ativo em {catalogo.caminho_produtos}",
+                f"nenhum produto com status=ativo em {catalogo.rotulo}",
                 "so produtos ativos entram no sorteio do briefing",
             )
         ]
@@ -94,7 +96,7 @@ def checar_produtos(catalogo: Catalogo) -> list[Checagem]:
                 "catalogo preenchido",
                 AVISO,
                 "os SKUs de exemplo do repositorio ainda estao ativos",
-                f"troque {catalogo.caminho_produtos} pelos seus produtos reais",
+                f"cadastre seus produtos reais em {catalogo.rotulo}",
             )
         )
 
@@ -113,7 +115,7 @@ def checar_produtos(catalogo: Catalogo) -> list[Checagem]:
     return checagens
 
 
-def checar_blocos(caminho: Path, catalogo: Catalogo, janela: int = JANELA_PADRAO) -> list[Checagem]:
+def checar_blocos(caminho: Path, catalogo: ProtocoloCatalogo, janela: int = JANELA_PADRAO) -> list[Checagem]:
     try:
         matriz = mod_blocos.carregar(caminho)
     except mod_blocos.ErroBlocos as exc:
@@ -190,6 +192,52 @@ def checar_fonte(ambiente: dict[str, str] | None = None) -> Checagem:
     )
 
 
+def checar_backend(
+    dados: Path | str = "data",
+    ambiente: dict[str, str] | None = None,
+) -> Checagem:
+    """Com Supabase, uma variavel faltando so apareceria como 'nenhum produto'."""
+    escolhido = backend_ativo(ambiente)
+
+    if escolhido == "csv":
+        return Checagem("backend", OK, f"csv (catalogo local em {dados})")
+
+    if escolhido not in ("csv", "supabase"):
+        return Checagem(
+            "backend",
+            ERRO,
+            f"GDV_BACKEND={escolhido!r} invalido",
+            "use GDV_BACKEND=csv ou GDV_BACKEND=supabase",
+        )
+
+    ambiente = os.environ if ambiente is None else ambiente
+    faltando = [
+        v
+        for v in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_EMAIL", "SUPABASE_SENHA")
+        if not ambiente.get(v, "").strip()
+    ]
+    if faltando:
+        return Checagem(
+            "backend",
+            ERRO,
+            f"GDV_BACKEND=supabase mas falta {', '.join(faltando)}",
+            "preencha o .env; a RLS exige sessao autenticada para ler qualquer coisa",
+        )
+
+    try:
+        catalogo = abrir_catalogo(dados, ambiente)
+        total = len(catalogo.produtos())
+    except Exception as exc:
+        return Checagem(
+            "backend",
+            ERRO,
+            f"nao consegui falar com o Supabase: {exc}",
+            "confira URL, chave e credenciais; o projeto pode estar pausado por inatividade",
+        )
+
+    return Checagem("backend", OK, f"supabase conectado ({total} produto(s))")
+
+
 def checar_trilhas(diretorio: Path) -> Checagem:
     trilhas = mod_montagem.listar_trilhas(diretorio)
     if not trilhas:
@@ -221,18 +269,24 @@ def diagnosticar(
     trilhas: Path | str = "assets/audio",
     ambiente: dict[str, str] | None = None,
 ) -> list[Checagem]:
-    catalogo = Catalogo(dados)
+    backend = checar_backend(dados, ambiente)
+    checagens = [checar_ffmpeg(), backend]
 
-    return [
-        checar_ffmpeg(),
-        *checar_produtos(catalogo),
-        *checar_blocos(Path(dados) / "blocos.yaml", catalogo),
+    # Sem backend nao da para consultar o catalogo; checar produtos aqui so
+    # produziria um segundo erro dizendo a mesma coisa.
+    if backend.nivel != ERRO:
+        catalogo = abrir_catalogo(dados, ambiente)
+        checagens += checar_produtos(catalogo)
+        checagens += checar_blocos(Path(dados) / "blocos.yaml", catalogo)
+
+    checagens += [
         checar_llm(ambiente),
         checar_fonte(ambiente),
         checar_trilhas(Path(trilhas)),
         checar_diretorio_gravavel("entrada", Path(entrada)),
         checar_diretorio_gravavel("saida", Path(saida)),
     ]
+    return checagens
 
 
 def tem_erro(checagens: list[Checagem]) -> bool:
