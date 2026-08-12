@@ -27,15 +27,35 @@ dinheiro.
 
 ## Instalação
 
+Precisa de Python 3.10+ e, para a montagem, do `ffmpeg`.
+
 ```bash
-pip install -e ".[dev]"          # núcleo + testes
-pip install -e ".[gemini]"       # opcional: redação via Gemini
-cp .env.example .env             # e preencha GEMINI_API_KEY
+# 1. ffmpeg (traz o ffprobe junto)
+winget install Gyan.FFmpeg      # Windows — reabra o terminal depois, para o PATH atualizar
+brew install ffmpeg             # macOS
+sudo apt install ffmpeg         # Linux
+
+# 2. o pacote
+pip install -e ".[dev]"         # núcleo + testes
+pip install -e ".[gemini]"      # opcional: redação via Gemini
+
+# 3. configuração
+cp .env.example .env            # e edite: GEMINI_API_KEY e GDV_FONTE
+
+# 4. confira o que ainda falta
+gdv doctor
 ```
 
-Sem `GEMINI_API_KEY` o pipeline continua funcionando: o redator cai para o modo template,
-determinístico e offline. `gdv montar` exige `ffmpeg` e `ffprobe` no PATH
-(`sudo apt install ffmpeg`).
+`gdv doctor` é o comando que responde "está pronto?". Ele checa ffmpeg, catálogo, matriz de blocos,
+chave do Gemini, fonte do overlay, trilhas e permissão de escrita — e diz o que fazer em cada item
+que não passou. Sai com código 1 se houver algo que **impede** o pipeline de rodar; avisos (coisas
+opcionais, como não ter trilha) não travam.
+
+Duas coisas são opcionais e degradam em silêncio se você não configurar:
+
+- Sem `GEMINI_API_KEY`, o redator cai para o modo template — determinístico e offline.
+- Sem `GDV_FONTE` apontando para uma fonte existente, **os vídeos saem sem o gancho na tela**. No
+  Windows use `C:\Windows\Fonts\arialbd.ttf`. O `doctor` avisa quando isso acontece.
 
 ## Fluxo diário
 
@@ -61,6 +81,7 @@ gdv status 1 postado
 ### Comandos
 
 ```
+gdv doctor   [--entrada entrada] [--saida saida] [--trilhas assets/audio]
 gdv briefing [--qtd 5] [--data AAAA-MM-DD] [--seed N] [--janela 30] [--sem-llm] [--dry-run]
 gdv montar   [--id ID] [--entrada entrada] [--saida saida/videos] [--trilhas assets/audio]
 gdv status   ID {briefado,gerado,montado,postado}

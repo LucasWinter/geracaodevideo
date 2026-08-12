@@ -130,13 +130,61 @@ def test_gancho_vira_overlay_quando_a_fonte_existe(variacao, tmp_path):
     assert r"POV\: achei por R$ 89\,90" in filtro
 
 
-def test_sem_fonte_o_video_sai_sem_overlay_em_vez_de_falhar(variacao, tmp_path):
+def test_sem_fonte_o_video_sai_sem_overlay_em_vez_de_falhar(variacao, tmp_path, monkeypatch):
+    import gdv.montagem as mod
+
+    monkeypatch.setattr(mod, "FONTES_PADRAO", ())  # simula maquina sem fonte conhecida
+
     comando = construir_comando(
         [tmp_path / "a.mp4"], tmp_path / "out.mp4", variacao,
         gancho="qualquer coisa", fonte=str(tmp_path / "inexistente.ttf"),
     )
 
     assert "drawtext=" not in _valor_de(comando, "-filter_complex")
+
+
+def test_fonte_preferida_inexistente_cai_para_a_conhecida(tmp_path, monkeypatch):
+    import gdv.montagem as mod
+
+    conhecida = tmp_path / "conhecida.ttf"
+    conhecida.write_bytes(b"")
+    monkeypatch.setattr(mod, "FONTES_PADRAO", (str(conhecida),))
+
+    assert mod.resolver_fonte(str(tmp_path / "nao_existe.ttf")) == str(conhecida)
+
+
+def test_gdv_fonte_tem_prioridade_sobre_a_conhecida(tmp_path, monkeypatch):
+    import gdv.montagem as mod
+
+    preferida = tmp_path / "preferida.ttf"
+    conhecida = tmp_path / "conhecida.ttf"
+    preferida.write_bytes(b"")
+    conhecida.write_bytes(b"")
+    monkeypatch.setattr(mod, "FONTES_PADRAO", (str(conhecida),))
+
+    assert mod.resolver_fonte(str(preferida)) == str(preferida)
+
+
+def test_caminho_windows_vira_sintaxe_valida_de_filtro():
+    from gdv.montagem import escapar_fontfile
+
+    assert escapar_fontfile(r"C:\Windows\Fonts\arialbd.ttf") == r"C\:/Windows/Fonts/arialbd.ttf"
+
+
+def test_drawtext_com_fonte_windows_nao_leva_dois_pontos_cru(variacao, tmp_path, monkeypatch):
+    """No Windows, ':' cru no fontfile e separador de opcao e quebra o filtro."""
+    import gdv.montagem as mod
+
+    monkeypatch.setattr(mod, "resolver_fonte", lambda _=None: r"C:\Windows\Fonts\arialbd.ttf")
+
+    comando = construir_comando(
+        [tmp_path / "a.mp4"], tmp_path / "out.mp4", variacao, gancho="oi",
+    )
+    filtro = _valor_de(comando, "-filter_complex")
+    trecho = filtro.split("fontfile=")[1].split(":text=")[0]
+
+    assert trecho == r"C\:/Windows/Fonts/arialbd.ttf"
+    assert "\\W" not in trecho
 
 
 def test_escape_protege_os_metacaracteres_do_drawtext():

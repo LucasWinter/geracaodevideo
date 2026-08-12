@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import blocos as mod_blocos
 from . import briefing as mod_briefing
+from . import diagnostico as mod_diagnostico
 from . import montagem as mod_montagem
 from .catalogo import Catalogo, ErroCatalogo
 from .modelos import STATUS_VIDEO
@@ -102,6 +103,40 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    checagens = mod_diagnostico.diagnosticar(
+        dados=args.dados,
+        entrada=args.entrada,
+        saida=args.saida,
+        trilhas=args.trilhas,
+    )
+
+    marca = {
+        mod_diagnostico.OK: "[ok]   ",
+        mod_diagnostico.AVISO: "[aviso]",
+        mod_diagnostico.ERRO: "[erro] ",
+    }
+
+    for checagem in checagens:
+        print(f"{marca[checagem.nivel]} {checagem.nome}: {checagem.mensagem}")
+        if checagem.dica and checagem.nivel != mod_diagnostico.OK:
+            print(f"          → {checagem.dica}")
+
+    erros = sum(1 for c in checagens if c.nivel == mod_diagnostico.ERRO)
+    avisos = sum(1 for c in checagens if c.nivel == mod_diagnostico.AVISO)
+
+    print()
+    if erros:
+        print(f"{erros} erro(s) e {avisos} aviso(s). Os erros impedem o pipeline de rodar.")
+        return 1
+
+    if avisos:
+        print(f"{avisos} aviso(s), nenhum erro. Dá para rodar; os avisos são qualidade.")
+    else:
+        print("Tudo pronto.")
+    return 0
+
+
 def cmd_catalogo(args: argparse.Namespace) -> int:
     catalogo = Catalogo(args.dados)
     contagens = catalogo.contagem_por_sku()
@@ -157,6 +192,12 @@ def construir_parser() -> argparse.ArgumentParser:
     p.add_argument("id")
     p.add_argument("novo_status", choices=STATUS_VIDEO)
     p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("doctor", help="checa o que falta para o pipeline rodar")
+    p.add_argument("--entrada", default="entrada")
+    p.add_argument("--saida", default="saida")
+    p.add_argument("--trilhas", default="assets/audio")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("catalogo", help="lista produtos e o resumo do log")
     p.set_defaults(func=cmd_catalogo)

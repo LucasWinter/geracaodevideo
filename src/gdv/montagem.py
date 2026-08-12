@@ -23,7 +23,21 @@ from .modelos import RegistroVideo
 LARGURA, ALTURA = 1080, 1920
 FPS = 30
 
-FONTE_PADRAO = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+# Caminhos conhecidos por plataforma, tentados em ordem. GDV_FONTE tem prioridade
+# sobre todos. Nao ha varredura do sistema: se nenhum existir, o video sai sem o
+# overlay e `gdv doctor` avisa.
+FONTES_PADRAO = (
+    # Windows
+    r"C:\Windows\Fonts\arialbd.ttf",
+    r"C:\Windows\Fonts\seguisb.ttf",
+    r"C:\Windows\Fonts\segoeuib.ttf",
+    # Linux
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    # macOS
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",
+)
 EXTENSOES_TRILHA = (".mp3", ".m4a", ".aac", ".wav")
 
 
@@ -120,6 +134,25 @@ def listar_trilhas(diretorio: Path | str) -> list[Path]:
     return [p for p in sorted(diretorio.iterdir()) if p.suffix.lower() in EXTENSOES_TRILHA]
 
 
+def resolver_fonte(preferida: str | None = None) -> str | None:
+    """Primeira fonte utilizavel: a preferida (GDV_FONTE) ou um caminho conhecido."""
+    for candidata in filter(None, (preferida, *FONTES_PADRAO)):
+        if Path(candidata).exists():
+            return candidata
+    return None
+
+
+def escapar_fontfile(caminho: str) -> str:
+    r"""Deixa um caminho absoluto utilizavel dentro do filter_complex.
+
+    No Windows, `C:\Windows\Fonts\arialbd.ttf` e sintaticamente invalido para o
+    ffmpeg: `:` separa opcoes de filtro e `\` e escape. O ffmpeg aceita `/` como
+    separador em qualquer plataforma, entao normalizamos e escapamos o `:` do
+    drive.
+    """
+    return caminho.replace("\\", "/").replace(":", r"\:")
+
+
 def escapar_drawtext(texto: str) -> str:
     """drawtext interpreta \\ : ' % — sem escapar, um gancho com ':' quebra o filtro."""
     for alvo, substituto in (
@@ -185,10 +218,10 @@ def construir_comando(
         f"eq=contrast={variacao.contraste}:saturation={variacao.saturacao}"
     )
 
-    caminho_fonte = fonte or FONTE_PADRAO
-    if gancho and Path(caminho_fonte).exists():
+    caminho_fonte = resolver_fonte(fonte)
+    if gancho and caminho_fonte:
         cadeia_v += (
-            f",drawtext=fontfile={caminho_fonte}"
+            f",drawtext=fontfile={escapar_fontfile(caminho_fonte)}"
             f":text='{escapar_drawtext(gancho)}'"
             f":fontcolor=white:fontsize=54:line_spacing=10"
             f":borderw=4:bordercolor=black@0.7"
