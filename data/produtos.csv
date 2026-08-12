@@ -1,0 +1,3 @@
+sku,nome,categoria,preco,margem,link_shop,pasta_drive,angulos,status
+BLS-001,Bolsa Tiracolo Couro Sintetico Preta,bolsas,89.90,0.42,https://shop.tiktok.com/exemplo/bls-001,https://drive.google.com/drive/folders/EXEMPLO_BLS001,frontal;lateral;interior;detalhe-fecho,ativo
+CAS-014,Caneca Ceramica Fosca 350ml,casa,39.90,0.55,https://shop.tiktok.com/exemplo/cas-014,https://drive.google.com/drive/folders/EXEMPLO_CAS014,frontal;topo;alca;com-liquido,ativo

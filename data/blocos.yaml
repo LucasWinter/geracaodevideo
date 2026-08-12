@@ -1,0 +1,146 @@
+# Matriz combinatoria — o coracao do motor de prompts.
+#
+# Este e o arquivo que voce mais vai editar. Adicionar um valor aqui multiplica o
+# espaco de combinacoes sem tocar em codigo.
+#
+# Cada valor tem:
+#   id         identificador estavel. E o que entra no hash de combinacao, entao
+#              NAO renomeie um id ja usado: o historico de anti-repeticao perde a
+#              referencia e a combinacao volta a ser sorteada.
+#   texto      versao em portugues, para o briefing e para o gancho na tela.
+#   en         descritor em ingles, usado para compor o prompt do Veo. E o que
+#              mantem o modo template (offline, sem LLM) utilizavel.
+#   categorias (opcional) restringe o valor a certas categorias de produto. Sem
+#              isso, "provando no espelho" seria sorteado para uma caneca.
+
+# Termos barrados em prompt e legenda por politica de claim do TikTok Shop.
+# Filtro deterministico aplicado sobre a saida do redator — instrucao de prompt
+# nao e controle, esta lista e.
+termos_proibidos:
+  - clareia
+  - clareamento
+  - emagrece
+  - emagrecimento
+  - cura
+  - trata
+  - elimina rugas
+  - remove manchas
+  - anti-idade
+  - antiidade
+  - resultado garantido
+  - em 7 dias
+  - em 30 dias
+  - aprovado pela anvisa
+  - cientificamente comprovado
+  - whitens
+  - cures
+  - treats
+  - guaranteed results
+  - clinically proven
+
+eixos:
+  gancho_pov:
+    - id: achado_preco
+      texto: "POV: você achou isso por R$ {preco}"
+      en: "first-person POV of a hand discovering the product and picking it up"
+    - id: unboxing_mesa
+      texto: "unboxing na mesa"
+      en: "hands opening a plain package on a table and revealing the product"
+    - id: arrumando_bolsa
+      texto: "arrumando a bolsa"
+      en: "hands arranging small everyday items around the product"
+      categorias: [bolsas, acessorios]
+    - id: provando_espelho
+      texto: "provando no espelho"
+      en: "person trying the product on in front of a mirror, face out of frame"
+      categorias: [bolsas, acessorios, moda]
+    - id: rotina_manha
+      texto: "a parte favorita da minha manhã"
+      en: "the product being used as part of a calm morning routine"
+      categorias: [casa, cuidados]
+    - id: presente_embrulho
+      texto: "achei o presente perfeito"
+      en: "hands finishing wrapping the product as a gift"
+
+  cenario:
+    - id: mesa_marmore
+      texto: "mesa de mármore"
+      en: "white marble tabletop, clean and uncluttered"
+    - id: cama_lencol_bege
+      texto: "cama com lençol bege"
+      en: "unmade bed with beige linen sheets"
+    - id: banheiro_luz_natural
+      texto: "banheiro com luz natural"
+      en: "minimal bathroom counter with natural daylight from a window"
+    - id: mesa_cafe
+      texto: "mesa de café"
+      en: "wooden cafe table with a coffee cup slightly out of focus"
+    - id: bancada_madeira
+      texto: "bancada de madeira clara"
+      en: "light oak kitchen counter with soft shadows"
+
+  camera:
+    - id: macro_push_in
+      texto: "macro slow push-in"
+      en: "slow macro push-in toward the product"
+    - id: orbit_lento
+      texto: "orbit lento"
+      en: "slow orbital move around the product"
+    - id: top_down_mao
+      texto: "top-down com mão entrando"
+      en: "locked top-down shot, a hand entering frame to touch the product"
+    - id: tilt_baixo_cima
+      texto: "tilt de baixo pra cima"
+      en: "low-angle tilt rising to reveal the product"
+    - id: handheld_sutil
+      texto: "handheld sutil"
+      en: "subtle handheld drift, slight natural shake"
+
+  iluminacao:
+    - id: janela_suave
+      texto: "luz de janela suave"
+      en: "soft diffused window light, gentle falloff"
+    - id: golden_hour
+      texto: "golden hour"
+      en: "warm golden-hour light with long soft shadows"
+    - id: fria_banheiro
+      texto: "luz fria de banheiro"
+      en: "cool neutral overhead light, clean and even"
+    - id: spot_direcional
+      texto: "spot direcional"
+      en: "single directional spotlight, dark falloff around the subject"
+
+  detalhe_close:
+    - id: textura_verniz
+      texto: "textura do verniz"
+      en: "extreme close-up on the surface finish and its texture"
+    - id: fecho
+      texto: "fecho"
+      en: "extreme close-up on the clasp/closure operating"
+      categorias: [bolsas, acessorios, moda]
+    - id: costura
+      texto: "costura"
+      en: "extreme close-up on the stitching along the edge"
+      categorias: [bolsas, acessorios, moda]
+    - id: etiqueta
+      texto: "etiqueta"
+      en: "extreme close-up on the product label"
+    - id: reflexo
+      texto: "reflexo"
+      en: "extreme close-up on light reflecting off the surface"
+    - id: borda_alca
+      texto: "borda e alça"
+      en: "extreme close-up on the rim and handle"
+      categorias: [casa]
+
+  ritmo:
+    - id: continuo_8s
+      texto: "1 corte contínuo de 8s"
+      en: "one continuous 8-second take, no cuts"
+      clipes: 1
+      duracao: 8
+    - id: dois_de_4s
+      texto: "2 clipes de 4s"
+      en: "two 4-second shots cut together"
+      clipes: 2
+      duracao: 4

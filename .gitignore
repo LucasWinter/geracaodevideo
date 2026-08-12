@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.venv/
+
+# Material de trabalho: clipes baixados do Flow e arquivos finais
+entrada/
+saida/
+assets/audio/*
+!assets/audio/.gitkeep

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gdv"
+version = "0.1.0"
+description = "Pipeline de geracao de videos para TikTok Shop: catalogo, motor de prompts, briefing diario e montagem"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+gemini = ["google-genai>=0.3.0"]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+gdv = "gdv.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
