@@ -1,7 +1,8 @@
-# Dependencias do site (Vercel). A CLI usa o pyproject.toml.
+# Espelho de [project].dependencies do pyproject.toml, caso a Vercel prefira
+# este arquivo. Mantenha os dois em sincronia.
+PyYAML>=6.0
 fastapi>=0.115
 jinja2>=3.1
 python-multipart>=0.0.9
 supabase>=2.10
-google-genai>=0.3
-PyYAML>=6.0
+google-genai>=0.3.0

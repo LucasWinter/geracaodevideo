@@ -100,6 +100,57 @@ def test_cookie_de_sessao_e_httponly(deslogado, monkeypatch):
     assert "secure" in cabecalho
 
 
+# ---------------------------------------------------------------- diagnostico
+
+def test_saude_responde_sem_sessao(deslogado):
+    """E a rota que serve justamente quando o login nao funciona."""
+    resposta = deslogado.get("/saude")
+
+    assert resposta.status_code == 200
+    assert resposta.json()["modulos"]["fastapi"] is True
+
+
+def test_saude_confirma_o_que_o_deploy_precisa(deslogado):
+    dados = deslogado.get("/saude").json()
+
+    assert dados["modulos"]["gdv"] is True
+    assert dados["modulos"]["supabase"] is True
+    assert dados["arquivos"]["web/templates"] is True
+    assert dados["arquivos"]["data/blocos.yaml"] is True
+
+
+def test_saude_nao_vaza_valor_de_variavel(deslogado, monkeypatch):
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "chave-secreta-nao-pode-vazar")
+
+    resposta = deslogado.get("/saude")
+
+    assert "chave-secreta-nao-pode-vazar" not in resposta.text
+    assert resposta.json()["variaveis_definidas"]["SUPABASE_ANON_KEY"] is True
+
+
+def test_app_sobe_sem_o_diretorio_de_estaticos(monkeypatch):
+    """CSS ausente no bundle nao pode derrubar o app inteiro no import.
+
+    Reexecuta o modulo com todo `is_dir()` respondendo False, que e como o
+    ambiente da funcao se comporta quando web/static nao entrou no bundle.
+    """
+    import importlib
+    import pathlib
+
+    import web.main as mod
+
+    monkeypatch.setattr(pathlib.Path, "is_dir", lambda _: False)
+    try:
+        recarregado = importlib.reload(mod)
+        assert recarregado.app is not None
+        rotas = {getattr(r, "path", None) for r in recarregado.app.routes}
+        assert "/saude" in rotas
+        assert "/static" not in rotas  # o mount foi pulado, nao explodiu
+    finally:
+        monkeypatch.undo()
+        importlib.reload(mod)
+
+
 def test_sem_config_do_supabase_diz_o_que_falta(deslogado):
     """Deploy sem as variaveis na Vercel: mensagem acionavel, nao stack trace."""
     resposta = deslogado.post("/login", data={"email": "a@b.c", "senha": "x"})

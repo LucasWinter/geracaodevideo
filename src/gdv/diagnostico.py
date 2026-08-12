@@ -42,6 +42,19 @@ class Checagem:
     dica: str = ""
 
 
+def modulo_disponivel(nome: str) -> bool:
+    """Checa se um modulo pode ser importado, sem importa-lo.
+
+    `find_spec` importa os pacotes-pai para achar o filho, entao
+    `find_spec("google.genai")` levanta ModuleNotFoundError quando `google` nao
+    existe — em vez de devolver None. Aqui isso e so False.
+    """
+    try:
+        return find_spec(nome) is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
+
+
 def _dica_ffmpeg() -> str:
     if sys.platform.startswith("win"):
         return "winget install Gyan.FFmpeg (e reabra o terminal para o PATH atualizar)"
@@ -162,12 +175,12 @@ def checar_llm(ambiente: dict[str, str] | None = None) -> Checagem:
             "opcional. Para ativar: copie .env.example para .env e preencha a chave",
         )
 
-    if find_spec("google.genai") is None:
+    if not modulo_disponivel("google.genai"):
         return Checagem(
             "gemini",
             AVISO,
             "GEMINI_API_KEY definida mas a lib nao esta instalada — cai para template",
-            'pip install -e ".[gemini]"',
+            'pip install -e "."',
         )
 
     return Checagem("gemini", OK, "GEMINI_API_KEY definida e google-genai instalado")

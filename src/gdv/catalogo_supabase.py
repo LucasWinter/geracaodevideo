@@ -38,7 +38,7 @@ def criar_cliente(
         from supabase import create_client
     except ImportError as exc:  # pragma: no cover - depende do ambiente
         raise ErroCatalogo(
-            'biblioteca supabase nao instalada; rode: pip install -e ".[supabase]"'
+            'biblioteca supabase nao instalada; rode: pip install -e "."'
         ) from exc
 
     url = url or os.environ.get("SUPABASE_URL", "").strip()

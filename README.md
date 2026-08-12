@@ -37,7 +37,7 @@ brew install ffmpeg             # macOS
 sudo apt install ffmpeg         # Linux
 
 # 2. o pacote
-pip install -e ".[dev,web,supabase,gemini]"
+pip install -e ".[dev]"
 
 # 3. configuração
 cp .env.example .env            # Supabase, GEMINI_API_KEY e GDV_FONTE
@@ -105,7 +105,7 @@ janela anti-repetição de um não enxerga o que o outro gerou.
 ### Rodar local
 
 ```bash
-pip install -e ".[dev,web,supabase]"
+pip install -e ".[dev]"
 uvicorn web.main:app --reload
 ```
 
@@ -125,6 +125,18 @@ Variáveis obrigatórias no projeto da Vercel:
 `SUPABASE_EMAIL` e `SUPABASE_SENHA` **não** vão para a Vercel: no site quem
 autentica é você, pelo formulário de login. Elas só existem no `.env` local, para
 a CLI.
+
+### Quando o deploy quebrar
+
+Abra **`/saude`** — rota pública que responde JSON dizendo o que falta: quais módulos importam, se
+`templates`, `static` e `blocos.yaml` entraram no bundle da função, e quais variáveis de ambiente
+estão definidas. Ela reporta só booleanos, nunca o valor de uma variável.
+
+É o caminho mais curto para diagnosticar um `FUNCTION_INVOCATION_FAILED` sem caçar log.
+
+Uma armadilha já paga por este projeto: **a Vercel instala a partir do `pyproject.toml` e não instala
+extras**. Toda dependência que o site precisa tem que estar em `[project].dependencies` — se voltar
+para `[project.optional-dependencies]`, o build passa e a função morre no primeiro import.
 
 ### Segurança
 

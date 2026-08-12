@@ -11,7 +11,9 @@ continua local.
 from __future__ import annotations
 
 import asyncio
+import os
 import random
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -23,6 +25,7 @@ from fastapi.templating import Jinja2Templates
 from gdv import blocos as mod_blocos
 from gdv import briefing as mod_briefing
 from gdv.catalogo import ErroCatalogo
+from gdv.diagnostico import modulo_disponivel
 from gdv.modelos import EIXOS, STATUS_PRODUTO, Produto
 from gdv.redator import criar_redator
 from gdv.sorteio import EspacoCombinatorioEsgotado, sortear_lote
@@ -32,11 +35,20 @@ from . import auth
 RAIZ = Path(__file__).resolve().parents[1]
 BLOCOS = RAIZ / "data" / "blocos.yaml"
 
-app = FastAPI(title="gdv")
-app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+ESTATICOS = Path(__file__).parent / "static"
+MODELOS = Path(__file__).parent / "templates"
 
-PUBLICAS = {"/login", "/static", "/favicon.ico"}
+app = FastAPI(title="gdv")
+
+# StaticFiles levanta RuntimeError na construcao se o diretorio nao existir, o
+# que derrubaria o app inteiro no import por causa do CSS. Pagina sem estilo e
+# melhor que 500; /saude denuncia se isso acontecer.
+if ESTATICOS.is_dir():
+    app.mount("/static", StaticFiles(directory=str(ESTATICOS)), name="static")
+
+templates = Jinja2Templates(directory=str(MODELOS))
+
+PUBLICAS = {"/login", "/static", "/favicon.ico", "/saude"}
 
 
 @app.middleware("http")
@@ -61,6 +73,34 @@ def catalogo_de(request: Request):
 
 def _pagina(request: Request, template: str, **contexto) -> HTMLResponse:
     return templates.TemplateResponse(request, template, contexto)
+
+
+# ----------------------------------------------------------------- diagnostico
+
+@app.get("/saude")
+def saude():
+    """Diz o que falta no deploy sem precisar de acesso aos logs.
+
+    Publica de proposito: e a rota que serve justamente quando o login nao
+    funciona. Reporta apenas booleanos e nomes — nunca o valor de uma variavel
+    de ambiente.
+    """
+    return {
+        "python": sys.version.split()[0],
+        "modulos": {
+            nome: modulo_disponivel(nome)
+            for nome in ("gdv", "fastapi", "jinja2", "supabase", "google.genai", "yaml")
+        },
+        "arquivos": {
+            "web/templates": MODELOS.is_dir(),
+            "web/static": ESTATICOS.is_dir(),
+            "data/blocos.yaml": BLOCOS.is_file(),
+        },
+        "variaveis_definidas": {
+            nome: bool(os.environ.get(nome, "").strip())
+            for nome in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "GEMINI_API_KEY")
+        },
+    }
 
 
 # ------------------------------------------------------------------- sessao

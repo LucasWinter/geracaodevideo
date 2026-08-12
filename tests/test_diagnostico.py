@@ -129,16 +129,22 @@ def test_sem_chave_avisa_modo_template():
 
 
 def test_chave_sem_lib_avisa(monkeypatch):
-    monkeypatch.setattr(diag, "find_spec", lambda _: None)
+    monkeypatch.setattr(diag, "modulo_disponivel", lambda _: False)
 
     checagem = diag.checar_llm({"GEMINI_API_KEY": "abc"})
 
     assert checagem.nivel == diag.AVISO
-    assert "gemini" in checagem.dica
+    assert "pip install" in checagem.dica
+
+
+def test_modulo_ausente_com_pai_ausente_e_so_false():
+    """find_spec levanta em vez de devolver None quando o pai nao existe."""
+    assert diag.modulo_disponivel("pacote_que_nao_existe.subpacote") is False
+    assert diag.modulo_disponivel("json") is True
 
 
 def test_chave_com_lib_e_ok(monkeypatch):
-    monkeypatch.setattr(diag, "find_spec", lambda _: object())
+    monkeypatch.setattr(diag, "modulo_disponivel", lambda _: True)
 
     assert diag.checar_llm({"GEMINI_API_KEY": "abc"}).nivel == diag.OK
 
