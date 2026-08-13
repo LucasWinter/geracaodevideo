@@ -116,12 +116,20 @@ da Vercel diz que declarar dependências em `pyproject.toml` *"enables automatic
 e ter `fastapi` em `[project].dependencies` já basta para ativá-lo.
 
 Nesse modo a Vercel resolve **um** entrypoint ASGI e serve o app inteiro por ele — não existe
-diretório `api/` com funções, e não há `vercel.json`. O entrypoint é declarado no `pyproject.toml`:
+diretório `api/` com funções. São três peças, e as três precisam existir:
+
+```jsonc
+// vercel.json — sem isto, um projeto com preset "Other" não roda detecção
+{ "framework": "fastapi" }                  // e o build sai vazio em ~50ms
+```
 
 ```toml
+# pyproject.toml
 [tool.vercel]
-entrypoint = "web.asgi:app"
+entrypoint = "main:app"     # main.py na raiz: um dos nomes que a detecção procura
 ```
+
+`main.py` na raiz só reexporta o app de `web/asgi.py`; a lógica fica lá.
 
 **As duas coisas andam juntas.** Se alguém mover `fastapi` de volta para um extra, a Vercel volta ao
 modo clássico e o entrypoint deixa de ser encontrado. Se alguém recriar `api/index.py` com um bloco
@@ -157,6 +165,9 @@ Duas armadilhas já pagas por este projeto:
   função morre no primeiro import.
 - **Falha de build em ~1 segundo não é build, é config rejeitada** — acontece antes de instalar
   qualquer coisa. Vá direto ao log do *build* (não ao de runtime): ele nomeia o problema.
+- **`Build Completed in [46ms]` com 404 em tudo significa que nada foi construído.** Sem
+  `"framework": "fastapi"` no `vercel.json`, um projeto importado com preset "Other" não roda
+  detecção nenhuma e publica saída vazia.
 
 ### Segurança
 
