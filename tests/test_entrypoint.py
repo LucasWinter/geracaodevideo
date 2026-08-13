@@ -38,6 +38,14 @@ def test_app_normal_e_o_painel():
     assert app.title == "gdv"
 
 
+def test_main_na_raiz_expoe_o_mesmo_app():
+    """`main:app` e o que a Vercel resolve; tem que ser o app de verdade."""
+    import main
+    from web.asgi import app
+
+    assert main.app is app
+
+
 def test_fallback_responde_500_com_json():
     app = criar_app_de_erro({"erro": "algo quebrou"})
 

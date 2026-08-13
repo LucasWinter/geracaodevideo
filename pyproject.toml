@@ -27,8 +27,10 @@ gdv = "gdv.cli:main"
 
 # Declarar fastapi em [project].dependencies ativa a deteccao de framework da
 # Vercel, que resolve um unico entrypoint ASGI em vez de funcoes em api/.
+# O alvo e main.py na raiz, um dos nomes que a deteccao procura; apontar direto
+# para web/asgi.py nao foi suficiente e o deploy subia sem funcao (404).
 [tool.vercel]
-entrypoint = "web.asgi:app"
+entrypoint = "main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
