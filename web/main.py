@@ -130,6 +130,16 @@ def separar_angulos(angulos: list[str]) -> tuple[list[str], str]:
     return marcados, "; ".join(livres)
 
 
+def margem_em_porcento(fracao: float) -> str:
+    """0.42 vira "42".
+
+    A margem e guardada como fracao desde a CLI e continua assim no banco; so a
+    exibicao muda. "fracao, ex.: 0.42" era o campo mais confuso do formulario —
+    ninguem pensa margem em decimal.
+    """
+    return f"{round(fracao * 100, 2):g}"
+
+
 def campos_de(produto: Produto | None) -> dict:
     """Valores que preenchem o formulario de produto.
 
@@ -139,7 +149,7 @@ def campos_de(produto: Produto | None) -> dict:
     """
     if produto is None:
         return {
-            "sku": "", "nome": "", "categoria": "", "preco": "0.00", "margem": "0.00",
+            "sku": "", "nome": "", "categoria": "", "preco": "", "margem": "",
             "link_shop": "", "pasta_drive": "", "angulos": [], "status": "ativo",
         }
     return {
@@ -147,7 +157,7 @@ def campos_de(produto: Produto | None) -> dict:
         "nome": produto.nome,
         "categoria": produto.categoria,
         "preco": f"{produto.preco:.2f}",
-        "margem": f"{produto.margem:.2f}",
+        "margem": margem_em_porcento(produto.margem),
         "link_shop": produto.link_shop,
         "pasta_drive": produto.pasta_drive,
         "angulos": produto.angulos,
@@ -169,6 +179,7 @@ def _form_produto(request: Request, campos: dict, *, existente: bool, erro: str 
         categorias=opcoes_de_categoria(catalogo_de(request)),
         angulos_sugeridos=ANGULOS_SUGERIDOS,
         outra_categoria=OUTRA_CATEGORIA,
+        hoje=date.today().isoformat(),  # so para o exemplo de nome de arquivo
     )
 
 
@@ -382,7 +393,8 @@ def salvar_produto(
             nome=nome.strip(),
             categoria=escolhida,
             preco=float(preco or 0),
-            margem=float(margem or 0),
+            # O formulario manda porcentagem; o modelo guarda fracao.
+            margem=float(margem or 0) / 100,
             link_shop=link_shop.strip(),
             pasta_drive=pasta_drive.strip(),
             angulos=lista_angulos,

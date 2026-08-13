@@ -119,6 +119,9 @@ def renderizar(itens: Sequence[ItemBriefing], registros: Sequence[RegistroVideo]
             "",
             f"- **Combinação** `{combinacao.hash}` · redigido por `{pacote.fonte}`",
             f"- **Fotos do produto:** {item.produto.pasta_drive}",
+            # A legenda gerada manda "link do produto na vitrine"; sem o link
+            # aqui a pessoa tinha que ir caçar no catalogo na hora de postar.
+            *([f"- **Link do Shop:** {item.produto.link_shop}"] if item.produto.link_shop else []),
             f"- **Cenário para o frame inicial:** {combinacao['cenario'].texto}",
             f"- **Ritmo:** {combinacao['ritmo'].texto} "
             f"({combinacao.clipes}× {combinacao.duracao}s)",

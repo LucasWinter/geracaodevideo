@@ -389,6 +389,49 @@ def test_erro_no_formulario_preserva_o_que_foi_digitado(logado):
     assert 'value="casa" selected' in resposta.text
 
 
+def test_margem_e_digitada_em_porcento_e_guardada_como_fracao(logado, catalogo_web):
+    """"fração, ex.: 0.42" era o campo mais confuso; o banco segue em fração."""
+    logado.post(
+        "/produto",
+        data={"sku": "MAR-1", "nome": "X", "categoria": "casa",
+              "margem": "42", "status": "ativo"},
+        follow_redirects=False,
+    )
+
+    assert catalogo_web.buscar_produto("MAR-1").margem == pytest.approx(0.42)
+
+
+def test_margem_volta_ao_formulario_em_porcento(logado, catalogo_web):
+    catalogo_web.salvar_produto(
+        Produto("MAR-2", "X", "casa", 10.0, 0.425, "", "", [], "ativo")
+    )
+
+    html = " ".join(logado.get("/produto/MAR-2").text.split())
+
+    # 42.5, nao 0.425 nem "42.50000000000001"
+    assert 'name="margem" type="number" step="0.1" min="0" max="100"' in html
+    assert 'value="42.5"' in html
+
+
+def test_formulario_agrupa_os_campos_pelo_efeito_que_tem(logado):
+    """Sete campos no mesmo peso visual nao diziam quais chegam ao prompt."""
+    html = logado.get("/produto/novo").text
+
+    assert "O que entra no vídeo" in html      # categoria, preco, angulos
+    assert "Links que o briefing mostra" in html  # drive, shop
+    assert "não afeta nada" in html            # margem, no <details>
+
+
+def test_link_do_shop_aparece_no_briefing(logado, catalogo_web):
+    """A legenda gerada manda "link do produto na vitrine"; o link tem que estar la."""
+    catalogo_web.salvar_produto(
+        Produto("SHP-1", "X", "casa", 10.0, 0.3, "https://shop/xyz", "", [], "ativo")
+    )
+    logado.post("/briefing", data={"qtd": 3})
+
+    assert "https://shop/xyz" in logado.get("/").text
+
+
 def test_quantidade_do_briefing_e_um_select(logado):
     resposta = logado.get("/")
 

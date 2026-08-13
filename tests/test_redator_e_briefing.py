@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 
@@ -181,3 +182,19 @@ def test_markdown_traz_o_essencial_de_cada_video(catalogo, matriz):
         assert registro.arquivo in texto
         assert item.produto.pasta_drive in texto
         assert item.combinacao["cenario"].texto in texto
+        # A legenda manda "link do produto na vitrine": o link precisa estar la.
+        if item.produto.link_shop:
+            assert item.produto.link_shop in texto
+
+
+def test_markdown_omite_a_linha_do_shop_quando_nao_ha_link(catalogo, matriz):
+    itens, registros = mod_briefing.montar(
+        catalogo, matriz, RedatorTemplate(matriz.termos_proibidos),
+        data="2026-08-12", qtd=1, rng=random.Random(8),
+    )
+    sem_link = replace(itens[0].produto, link_shop="")
+    itens = [replace(itens[0], produto=sem_link)]
+
+    texto = mod_briefing.renderizar(itens, registros, "2026-08-12")
+
+    assert "Link do Shop" not in texto

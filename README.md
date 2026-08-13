@@ -105,6 +105,24 @@ janela anti-repetição de um não enxerga o que o outro gerou.
 Três telas: **Briefing** (gerar o dia e copiar os prompts), **Catálogo** (cadastrar produtos) e
 **Matriz** (ver os blocos, só leitura).
 
+### O formulário de produto
+
+Os campos são agrupados pelo efeito que têm, porque nem todos têm um. Vale saber onde cada um chega:
+
+| campo | onde é usado |
+|---|---|
+| `sku` | nome do arquivo do vídeo (`BLS-001_2026-08-13_a1b2c3d4.mp4`) |
+| `nome` | vai literal para o prompt e pode aparecer no gancho |
+| `categoria` | filtra quais valores de bloco podem ser sorteados |
+| `preco` | prompt do Veo, gancho (`{preco}`) e listagem do catálogo |
+| `angulos` | chega ao redator como `angulos_disponiveis` |
+| `pasta_drive` | link no briefing; o `gdv doctor` avisa quando falta |
+| `link_shop` | link no briefing — é o que a legenda chama de "vitrine" |
+| `margem` | **nada.** É gravada e nunca lida pelo pipeline |
+
+A margem é digitada em **porcentagem** no formulário e guardada como fração (`42` → `0.42`). O modelo
+e o banco não mudaram; só a exibição, porque "fração, ex.: 0.42" era o campo que mais gerava dúvida.
+
 ### Campos com lista fixa
 
 Onde o valor válido é um conjunto conhecido, o formulário oferece a lista em vez de texto livre.

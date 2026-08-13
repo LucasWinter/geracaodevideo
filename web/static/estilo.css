@@ -218,7 +218,7 @@ tbody tr:hover td { background: var(--superficie-2); }
 
 /* -------------------------------------------------------------- formulario */
 
-.formulario { display: grid; gap: 1rem; max-width: 460px; }
+.formulario { display: grid; gap: 1rem; max-width: 520px; }
 .formulario label { display: grid; gap: .3rem; font-size: .9rem; color: var(--discreto); }
 .formulario input, .formulario select {
   /* 1rem e obrigatorio: abaixo de 16px o Safari do iPhone da zoom sozinho ao
@@ -239,6 +239,43 @@ tbody tr:hover td { background: var(--superficie-2); }
 a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
   outline: 2px solid var(--destaque); outline-offset: 2px;
 }
+
+/* Agrupamento por efeito: o que muda o video fica junto e em destaque; o que e
+   so registro desce para o <details>. Antes os sete campos tinham o mesmo peso
+   visual e nada dizia quais realmente chegam ao prompt. */
+.grupo {
+  display: grid; gap: 1rem; margin: 0;
+  border: 1px solid var(--borda); border-radius: var(--raio); padding: 1rem;
+}
+.grupo > legend {
+  font-weight: 600; color: var(--texto); font-size: .95rem; padding: 0 .4rem;
+}
+.nota { margin: 0; color: var(--discreto); font-size: .82rem; }
+
+.grupo-extra {
+  border: 1px solid var(--borda); border-radius: var(--raio); padding: .5rem 1rem;
+}
+.grupo-extra[open] { padding-bottom: 1rem; }
+.grupo-extra > summary {
+  font-weight: 600; color: var(--texto); font-size: .95rem;
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+}
+.grupo-extra > * + * { margin-top: 1rem; }
+
+/* Prefixo/sufixo colado ao campo: "R$" e "%" dizem a unidade sem gastar uma
+   linha de texto de apoio. */
+.com-prefixo {
+  display: flex; align-items: stretch;
+  border: 1px solid var(--borda); border-radius: 6px;
+  background: var(--superficie); overflow: hidden;
+}
+.com-prefixo:focus-within { outline: 2px solid var(--destaque); outline-offset: -1px; }
+.com-prefixo .prefixo {
+  display: flex; align-items: center; padding: 0 .6rem;
+  background: var(--superficie-2); color: var(--discreto); font-size: .9rem;
+}
+.formulario .com-prefixo input { border: 0; border-radius: 0; flex: 1 1 auto; min-width: 0; }
+.formulario .com-prefixo input:focus-visible { outline: none; }
 
 .caixas { border: 1px solid var(--borda); border-radius: var(--raio); padding: .75rem; margin: 0; }
 .caixas legend { font-size: .9rem; color: var(--discreto); padding: 0 .35rem; }

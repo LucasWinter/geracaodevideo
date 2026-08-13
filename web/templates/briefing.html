@@ -62,6 +62,10 @@
     {% if produto and produto.pasta_drive %}
     <li><a href="{{ produto.pasta_drive }}" target="_blank" rel="noopener">Fotos do produto ↗</a></li>
     {% endif %}
+    {# A legenda diz "link do produto na vitrine" — o link precisa estar a mao. #}
+    {% if produto and produto.link_shop %}
+    <li><a href="{{ produto.link_shop }}" target="_blank" rel="noopener">Link do Shop ↗</a></li>
+    {% endif %}
     <li>Salvar como <code>{{ video.arquivo }}</code></li>
   </ul>
 

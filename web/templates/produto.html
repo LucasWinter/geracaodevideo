@@ -21,90 +21,147 @@
 <form method="post" action="/produto" class="formulario">
   <input type="hidden" name="existente" value="{{ '1' if existente else '' }}">
 
-  <label>
-    SKU
-    <input name="sku" value="{{ campos.sku }}" {% if existente %}readonly{% endif %} required>
-    <small>identificador curto, entra no nome do arquivo do vídeo</small>
-  </label>
+  <fieldset class="grupo">
+    <legend>O produto</legend>
 
-  <label>
-    Nome
-    <input name="nome" value="{{ campos.nome }}" required>
-    <small>vai literal para o prompt — escreva como o produto é de verdade</small>
-  </label>
-
-  <label for="categoria">
-    Categoria
-    <select id="categoria" name="categoria" required>
-      <option value="" {% if not campos.categoria %}selected{% endif %} disabled>escolha…</option>
-      {% for opcao in categorias %}
-      <option value="{{ opcao }}" {% if campos.categoria == opcao %}selected{% endif %}>{{ opcao }}</option>
-      {% endfor %}
-      <option value="{{ outra_categoria }}" {% if categoria_livre %}selected{% endif %}>outra…</option>
-    </select>
-    <small>controla quais blocos podem ser sorteados — errar a grafia encolhe a variação em silêncio</small>
-  </label>
-
-  {# Sem JS o campo nunca sairia do hidden e "outra…" viraria beco sem saida. #}
-  <noscript><style>#campo-categoria-nova[hidden] { display: grid !important; }</style></noscript>
-  <label id="campo-categoria-nova" {% if not categoria_livre %}hidden{% endif %}>
-    Nova categoria
-    <input name="categoria_nova" value="{{ campos.categoria if categoria_livre else '' }}">
-    <small>só entra no sorteio dos blocos restritos depois de citada no <code>data/blocos.yaml</code></small>
-  </label>
-
-  <div class="dupla">
     <label>
-      Preço
-      <input name="preco" type="number" step="0.01" min="0" inputmode="decimal"
-             value="{{ campos.preco }}">
+      SKU
+      <input name="sku" value="{{ campos.sku }}" placeholder="BLS-001"
+             {% if existente %}readonly{% endif %} required>
+      <small>
+        Código curto, só seu. Aparece no nome do arquivo do vídeo:
+        <code id="exemplo-arquivo">{{ campos.sku or 'BLS-001' }}_{{ hoje }}_a1b2c3d4e5f6.mp4</code>
+      </small>
     </label>
+
     <label>
-      Margem
-      <input name="margem" type="number" step="0.01" min="0" max="1" inputmode="decimal"
-             value="{{ campos.margem }}">
-      <small>fração, ex.: 0.42</small>
+      Nome
+      <input name="nome" value="{{ campos.nome }}"
+             placeholder="Bolsa de ombro em couro sintético" required>
+      <small>
+        Vai literal para o prompt do vídeo e pode aparecer no gancho. Descreva o
+        produto como ele é — não use nome de anúncio.
+      </small>
     </label>
-  </div>
 
-  <label>
-    Link do Shop
-    <input name="link_shop" type="url" inputmode="url" value="{{ campos.link_shop }}">
-  </label>
-
-  <label>
-    Pasta de fotos no Drive
-    <input name="pasta_drive" type="url" inputmode="url" value="{{ campos.pasta_drive }}">
-    <small>4–8 fotos limpas. É o insumo do frame inicial no Nano Banana.</small>
-  </label>
-
-  <fieldset class="caixas">
-    <legend>Ângulos disponíveis</legend>
-    <div class="grade-caixas">
-      {% for angulo in angulos_sugeridos %}
-      <label class="caixa">
-        <input type="checkbox" name="angulos" value="{{ angulo }}"
-               {% if angulo in angulos_marcados %}checked{% endif %}>
-        <span>{{ angulo }}</span>
-      </label>
-      {% endfor %}
-    </div>
-    <label class="livre">
-      Outros ângulos
-      <input name="angulos_livres" value="{{ angulos_livres }}">
-      <small>separados por ponto e vírgula, para o que não está na lista</small>
+    <label for="status">
+      Status
+      <select id="status" name="status">
+        {% for opcao in status_validos %}
+        <option value="{{ opcao }}" {% if campos.status == opcao %}selected{% endif %}>{{ opcao }}</option>
+        {% endfor %}
+      </select>
+      <small>Só <code>ativo</code> entra no sorteio do briefing.</small>
     </label>
   </fieldset>
 
-  <label for="status">
-    Status
-    <select id="status" name="status">
-      {% for opcao in status_validos %}
-      <option value="{{ opcao }}" {% if campos.status == opcao %}selected{% endif %}>{{ opcao }}</option>
-      {% endfor %}
-    </select>
-    <small>só <code>ativo</code> entra no sorteio do briefing</small>
-  </label>
+  <fieldset class="grupo">
+    <legend>O que entra no vídeo</legend>
+    <p class="nota">Estes três campos mudam o vídeo que sai. Vale caprichar.</p>
+
+    <label for="categoria">
+      Categoria
+      <select id="categoria" name="categoria" required>
+        <option value="" {% if not campos.categoria %}selected{% endif %} disabled>escolha…</option>
+        {% for opcao in categorias %}
+        <option value="{{ opcao }}" {% if campos.categoria == opcao %}selected{% endif %}>{{ opcao }}</option>
+        {% endfor %}
+        <option value="{{ outra_categoria }}" {% if categoria_livre %}selected{% endif %}>outra…</option>
+      </select>
+      <small>
+        Decide quais cenários podem ser sorteados — "provando no espelho" só sai
+        para bolsa, nunca para caneca. Errar a grafia não dá erro: só encolhe a
+        variação, em silêncio.
+      </small>
+    </label>
+
+    {# Sem JS o campo nunca sairia do hidden e "outra…" viraria beco sem saida. #}
+    <noscript><style>#campo-categoria-nova[hidden] { display: grid !important; }</style></noscript>
+    <label id="campo-categoria-nova" {% if not categoria_livre %}hidden{% endif %}>
+      Nova categoria
+      <input name="categoria_nova" value="{{ campos.categoria if categoria_livre else '' }}"
+             placeholder="papelaria">
+      <small>
+        Só passa a puxar os cenários restritos depois de ser citada no
+        <code>data/blocos.yaml</code>. Até lá o produto usa só os cenários gerais.
+      </small>
+    </label>
+
+    <label>
+      Preço
+      <span class="com-prefixo">
+        <span class="prefixo" aria-hidden="true">R$</span>
+        <input name="preco" type="number" step="0.01" min="0" inputmode="decimal"
+               value="{{ campos.preco }}" placeholder="89.90">
+      </span>
+      <small>
+        Use ponto decimal. Entra no prompt e pode virar gancho:
+        <em>"achei por R$ 89,90"</em>.
+      </small>
+    </label>
+
+    <fieldset class="caixas">
+      <legend>Ângulos que você tem</legend>
+      <p class="nota">
+        Marque o que existe na pasta. O redator usa para montar a cena — marcar
+        <code>em-uso</code> faz ele pedir o produto sendo usado, não parado na mesa.
+      </p>
+      <div class="grade-caixas">
+        {% for angulo in angulos_sugeridos %}
+        <label class="caixa">
+          <input type="checkbox" name="angulos" value="{{ angulo }}"
+                 {% if angulo in angulos_marcados %}checked{% endif %}>
+          <span>{{ angulo }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <label class="livre">
+        Outros ângulos
+        <input name="angulos_livres" value="{{ angulos_livres }}"
+               placeholder="macro-costura; embalagem-aberta">
+        <small>Separados por ponto e vírgula, para o que não está na lista.</small>
+      </label>
+    </fieldset>
+  </fieldset>
+
+  <fieldset class="grupo">
+    <legend>Links que o briefing mostra</legend>
+    <p class="nota">Não entram no vídeo — ficam à mão no cartão do dia.</p>
+
+    <label>
+      Pasta de fotos no Drive
+      <input name="pasta_drive" type="url" inputmode="url" value="{{ campos.pasta_drive }}"
+             placeholder="https://drive.google.com/…">
+      <small>
+        4–8 fotos limpas, sem marca d'água. É o insumo do frame inicial — sem
+        foto boa, nenhuma etapa seguinte recupera a qualidade.
+      </small>
+    </label>
+
+    <label>
+      Link do Shop
+      <input name="link_shop" type="url" inputmode="url" value="{{ campos.link_shop }}"
+             placeholder="https://shop.tiktok.com/…">
+      <small>A legenda gerada diz "link do produto na vitrine" — é este link.</small>
+    </label>
+  </fieldset>
+
+  <details class="grupo-extra" {% if campos.margem %}open{% endif %}>
+    <summary>Só para o seu controle <span class="etiqueta">não afeta nada</span></summary>
+
+    <label>
+      Margem
+      <span class="com-prefixo">
+        <input name="margem" type="number" step="0.1" min="0" max="100" inputmode="decimal"
+               value="{{ campos.margem }}" placeholder="42">
+        <span class="prefixo" aria-hidden="true">%</span>
+      </span>
+      <small>
+        Sua margem de lucro. Fica salva no catálogo, mas nada no pipeline a lê
+        hoje — deixar em branco não tem prejuízo nenhum.
+      </small>
+    </label>
+  </details>
 
   <button class="primario" data-aguardando="salvando…">Salvar</button>
 </form>
@@ -118,13 +175,21 @@
   const campoNovo = document.getElementById('campo-categoria-nova');
   const entradaNova = campoNovo.querySelector('input');
 
-  function sincronizar() {
+  seletor.addEventListener('change', () => {
     const livre = seletor.value === '{{ outra_categoria }}';
     campoNovo.hidden = !livre;
     entradaNova.required = livre;
     if (livre) entradaNova.focus();
-  }
+  });
 
-  seletor.addEventListener('change', sincronizar);
+  // O SKU so fica concreto quando se ve o nome de arquivo que ele gera — e o
+  // nome que a pessoa vai procurar na pasta depois de baixar do Flow.
+  const campoSku = document.querySelector('input[name=sku]');
+  const exemplo = document.getElementById('exemplo-arquivo');
+  const modelo = exemplo.textContent;
+
+  campoSku.addEventListener('input', () => {
+    exemplo.textContent = modelo.replace(/^[^_]*/, campoSku.value.trim() || 'BLS-001');
+  });
 </script>
 {% endblock %}
