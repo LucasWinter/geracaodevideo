@@ -25,6 +25,17 @@ class MatrizBlocos:
     def compativeis(self, eixo: str, categoria: str) -> list[ValorBloco]:
         return [v for v in self.eixos[eixo] if v.serve(categoria)]
 
+    def categorias(self) -> tuple[str, ...]:
+        """Toda categoria citada por algum valor da matriz.
+
+        E a lista que o formulario de produto oferece. Um valor com `categorias`
+        so entra no sorteio quando a categoria do produto casa exatamente, e
+        errar a grafia nao levanta erro nenhum — so encolhe o espaco
+        combinatorio em silencio, que e a falha que ninguem percebe.
+        """
+        vistas = {c for valores in self.eixos.values() for v in valores for c in v.categorias}
+        return tuple(sorted(vistas))
+
     def espaco(self, categoria: str) -> int:
         """Quantas combinacoes distintas existem para uma categoria de produto."""
         total = 1

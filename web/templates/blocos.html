@@ -12,18 +12,22 @@
   multiplica o espaço de combinações sem tocar em código.
 </p>
 
+<nav class="atalhos" aria-label="Ir para um eixo">
+  {% for eixo in eixos %}<a href="#eixo-{{ eixo }}">{{ eixo }}</a>{% endfor %}
+</nav>
+
 {% for eixo in eixos %}
-<article class="card">
+<article class="card" id="eixo-{{ eixo }}">
   <header><h2>{{ eixo }}</h2><span class="etiqueta">{{ matriz.eixos[eixo]|length }} valores</span></header>
   <div class="tabela-rolagem">
-    <table>
+    <table class="tabela-cartoes">
       <thead><tr><th>id</th><th>texto</th><th>categorias</th></tr></thead>
       <tbody>
         {% for valor in matriz.eixos[eixo] %}
         <tr>
-          <td><code>{{ valor.id }}</code></td>
-          <td>{{ valor.texto }}</td>
-          <td>{{ valor.categorias|join(', ') if valor.categorias else 'todas' }}</td>
+          <td data-rotulo="id"><code>{{ valor.id }}</code></td>
+          <td data-rotulo="texto" class="livre">{{ valor.texto }}</td>
+          <td data-rotulo="categorias">{{ valor.categorias|join(', ') if valor.categorias else 'todas' }}</td>
         </tr>
         {% endfor %}
       </tbody>

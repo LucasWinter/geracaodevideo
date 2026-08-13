@@ -3,7 +3,7 @@
 
 {% block conteudo %}
 <div class="cabecalho">
-  <h1>Catálogo</h1>
+  <h1>Catálogo <span class="dia">{{ produtos|length }} produto{{ 's' if produtos|length != 1 }}</span></h1>
   <a href="/produto/novo" class="primario botao">Novo produto</a>
 </div>
 
@@ -13,8 +13,14 @@
   limpa na pasta do Drive, o frame inicial não sai bom.
 </p>
 {% else %}
+<div class="filtro">
+  <label for="busca" class="oculto-visual">Filtrar produtos</label>
+  <input id="busca" type="search" placeholder="filtrar por SKU, nome ou categoria"
+         autocomplete="off" hidden>
+</div>
+
 <div class="tabela-rolagem">
-  <table>
+  <table class="tabela-cartoes" id="tabela-produtos">
     <thead>
       <tr>
         <th>SKU</th><th>Nome</th><th>Categoria</th>
@@ -25,23 +31,48 @@
     <tbody>
       {% for produto in produtos %}
       <tr>
-        <td><a href="/produto/{{ produto.sku }}">{{ produto.sku }}</a></td>
-        <td>{{ produto.nome }}</td>
-        <td>{{ produto.categoria }}</td>
-        <td class="num">R$ {{ '%.2f'|format(produto.preco) }}</td>
-        <td class="num">{{ contagens.get(produto.sku, 0) }}</td>
-        <td>
+        <td data-rotulo="SKU"><a href="/produto/{{ produto.sku }}">{{ produto.sku }}</a></td>
+        <td data-rotulo="Nome"><a href="/produto/{{ produto.sku }}" class="nome">{{ produto.nome }}</a></td>
+        <td data-rotulo="Categoria">{{ produto.categoria }}</td>
+        <td data-rotulo="Preço" class="num">R$ {{ '%.2f'|format(produto.preco) }}</td>
+        <td data-rotulo="Vídeos" class="num">{{ contagens.get(produto.sku, 0) }}</td>
+        <td data-rotulo="Fotos">
           {% if produto.pasta_drive %}
             <a href="{{ produto.pasta_drive }}" target="_blank" rel="noopener">abrir ↗</a>
           {% else %}
             <span class="alerta">sem pasta</span>
           {% endif %}
         </td>
-        <td><span class="etiqueta status-{{ produto.status }}">{{ produto.status }}</span></td>
+        <td data-rotulo="Status"><span class="etiqueta status-{{ produto.status }}">{{ produto.status }}</span></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+<p class="vazio" id="sem-resultado" hidden>Nenhum produto casa com esse filtro.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if produtos %}
+<script>
+  // O filtro so aparece com JS: sem ele um campo que nao filtra nada seria pior
+  // que campo nenhum.
+  const busca = document.getElementById('busca');
+  const linhas = [...document.querySelectorAll('#tabela-produtos tbody tr')];
+  const semResultado = document.getElementById('sem-resultado');
+  busca.hidden = false;
+
+  busca.addEventListener('input', () => {
+    const termo = busca.value.trim().toLowerCase();
+    let visiveis = 0;
+    for (const linha of linhas) {
+      const casa = !termo || linha.textContent.toLowerCase().includes(termo);
+      linha.hidden = !casa;
+      if (casa) visiveis++;
+    }
+    semResultado.hidden = visiveis > 0;
+  });
+</script>
 {% endif %}
 {% endblock %}

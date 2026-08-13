@@ -102,12 +102,44 @@ de reimplementar o sorteio em JavaScript. Isso não é preferência de linguagem
 `hash_combinacao()` precisa dar exatamente o mesmo valor nos dois lugares, senão a
 janela anti-repetição de um não enxerga o que o outro gerou.
 
+Três telas: **Briefing** (gerar o dia e copiar os prompts), **Catálogo** (cadastrar produtos) e
+**Matriz** (ver os blocos, só leitura).
+
+### Campos com lista fixa
+
+Onde o valor válido é um conjunto conhecido, o formulário oferece a lista em vez de texto livre.
+Isso não é enfeite: **categoria errada não dá erro nenhum**. Um valor de bloco com `categorias:` só
+entra no sorteio quando casa exatamente, então digitar `bolsa` no singular apenas encolhe a variação,
+em silêncio, e você só percebe quando os vídeos começam a parecer iguais.
+
+- **Categoria** — as categorias citadas em `data/blocos.yaml` mais as que já existem no catálogo.
+  A opção `outra…` libera um campo de texto: dá para cadastrar um produto de categoria nova na hora,
+  mas ela só passa a puxar blocos restritos depois de ser citada no `blocos.yaml`.
+- **Ângulos** — caixas de seleção com a lista de `ANGULOS_SUGERIDOS` (`src/gdv/modelos.py`), mais um
+  campo livre para o que estiver fora dela. A lista não valida nada; é só a sugestão do formulário.
+- **Status** e **quantidade de vídeos** — listas fechadas.
+
 ### Rodar local
 
 ```bash
 pip install -e ".[dev]"
 uvicorn web.main:app --reload
 ```
+
+### Mobile
+
+O painel é usado no celular, entre outras coisas para copiar prompt na frente do computador que roda
+o Flow. O que isso exige, e que quebra fácil sem querer:
+
+- **Campo de formulário nunca abaixo de 16px.** O Safari do iPhone dá zoom sozinho ao focar um campo
+  com fonte menor, e a pessoa perde o enquadramento da página. `.formulario input` fixa `1rem`
+  justamente por isso — herdar a fonte do `<label>` (0.9rem) reintroduz o problema.
+- **Tabela vira lista de cartões abaixo de 640px.** Sete colunas nunca couberam em 390px, e a rolagem
+  lateral escondia Status e Fotos, que são o que se olha. O rótulo de cada célula vem do
+  `data-rotulo`, então uma coluna nova precisa do atributo para aparecer no celular.
+- **`[hidden]` precisa de `!important`.** O `display` do autor ganha do `display:none` que o navegador
+  dá ao atributo; sem isso, `.formulario label { display: grid }` deixava o campo de nova categoria
+  visível mesmo escondido no HTML.
 
 ### Deploy
 

@@ -116,3 +116,28 @@ def test_eixo_ausente_falha_no_load(tmp_path, dados):
 
     with pytest.raises(mod_blocos.ErroBlocos, match="eixos ausentes"):
         mod_blocos.carregar(alvo)
+
+
+def test_categorias_da_matriz_sao_as_que_o_formulario_oferece(dados):
+    """E a lista do <select> de categoria; sem ela a grafia vira adivinhacao."""
+    matriz = mod_blocos.carregar(dados / "blocos.yaml")
+
+    categorias = matriz.categorias()
+
+    assert categorias == tuple(sorted(categorias))  # ordenada e sem repeticao
+    assert "bolsas" in categorias
+    # Toda categoria citada por algum valor precisa aparecer, senao um bloco
+    # ficaria inalcancavel pelo formulario.
+    citadas = {c for vals in matriz.eixos.values() for v in vals for c in v.categorias}
+    assert set(categorias) == citadas
+
+
+def test_categorias_vazias_quando_nenhum_bloco_restringe(tmp_path, dados):
+    conteudo = yaml.safe_load((dados / "blocos.yaml").read_text(encoding="utf-8"))
+    for valores in conteudo["eixos"].values():
+        for valor in valores:
+            valor.pop("categorias", None)
+    alvo = tmp_path / "blocos.yaml"
+    alvo.write_text(yaml.safe_dump(conteudo, allow_unicode=True), encoding="utf-8")
+
+    assert mod_blocos.carregar(alvo).categorias() == ()

@@ -1,76 +1,130 @@
 {% extends "base.html" %}
-{% block titulo %}{{ produto.sku if produto else 'Novo produto' }}{% endblock %}
+{% block titulo %}{{ campos.sku if existente else 'Novo produto' }}{% endblock %}
 
 {% block conteudo %}
+{# Categoria fora da lista (produto antigo, ou erro de validacao com texto
+   digitado) precisa abrir ja no modo "outra", senao o valor sumiria. #}
+{% set categoria_livre = campos.categoria and campos.categoria not in categorias %}
+
+<nav class="trilha" aria-label="Trilha">
+  <a href="/catalogo">Catálogo</a> <span aria-hidden="true">/</span>
+  <span>{{ campos.sku if existente else 'Novo produto' }}</span>
+</nav>
+
 <div class="cabecalho">
-  <h1>{{ produto.sku if produto else 'Novo produto' }}</h1>
+  <h1>{{ campos.sku if existente else 'Novo produto' }}</h1>
   <a href="/catalogo" class="botao">Voltar</a>
 </div>
 
-{% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
 <form method="post" action="/produto" class="formulario">
+  <input type="hidden" name="existente" value="{{ '1' if existente else '' }}">
+
   <label>
     SKU
-    <input name="sku" value="{{ produto.sku if produto else '' }}"
-           {% if produto %}readonly{% endif %} required>
+    <input name="sku" value="{{ campos.sku }}" {% if existente %}readonly{% endif %} required>
     <small>identificador curto, entra no nome do arquivo do vídeo</small>
   </label>
 
   <label>
     Nome
-    <input name="nome" value="{{ produto.nome if produto else '' }}" required>
+    <input name="nome" value="{{ campos.nome }}" required>
     <small>vai literal para o prompt — escreva como o produto é de verdade</small>
   </label>
 
-  <label>
+  <label for="categoria">
     Categoria
-    <input name="categoria" value="{{ produto.categoria if produto else '' }}" required>
-    <small>controla quais blocos podem ser sorteados (ex.: bolsas, casa)</small>
+    <select id="categoria" name="categoria" required>
+      <option value="" {% if not campos.categoria %}selected{% endif %} disabled>escolha…</option>
+      {% for opcao in categorias %}
+      <option value="{{ opcao }}" {% if campos.categoria == opcao %}selected{% endif %}>{{ opcao }}</option>
+      {% endfor %}
+      <option value="{{ outra_categoria }}" {% if categoria_livre %}selected{% endif %}>outra…</option>
+    </select>
+    <small>controla quais blocos podem ser sorteados — errar a grafia encolhe a variação em silêncio</small>
+  </label>
+
+  {# Sem JS o campo nunca sairia do hidden e "outra…" viraria beco sem saida. #}
+  <noscript><style>#campo-categoria-nova[hidden] { display: grid !important; }</style></noscript>
+  <label id="campo-categoria-nova" {% if not categoria_livre %}hidden{% endif %}>
+    Nova categoria
+    <input name="categoria_nova" value="{{ campos.categoria if categoria_livre else '' }}">
+    <small>só entra no sorteio dos blocos restritos depois de citada no <code>data/blocos.yaml</code></small>
   </label>
 
   <div class="dupla">
     <label>
       Preço
-      <input name="preco" type="number" step="0.01" min="0"
-             value="{{ '%.2f'|format(produto.preco) if produto else '0.00' }}">
+      <input name="preco" type="number" step="0.01" min="0" inputmode="decimal"
+             value="{{ campos.preco }}">
     </label>
     <label>
       Margem
-      <input name="margem" type="number" step="0.01" min="0" max="1"
-             value="{{ '%.2f'|format(produto.margem) if produto else '0.00' }}">
+      <input name="margem" type="number" step="0.01" min="0" max="1" inputmode="decimal"
+             value="{{ campos.margem }}">
       <small>fração, ex.: 0.42</small>
     </label>
   </div>
 
   <label>
     Link do Shop
-    <input name="link_shop" type="url" value="{{ produto.link_shop if produto else '' }}">
+    <input name="link_shop" type="url" inputmode="url" value="{{ campos.link_shop }}">
   </label>
 
   <label>
     Pasta de fotos no Drive
-    <input name="pasta_drive" type="url" value="{{ produto.pasta_drive if produto else '' }}">
+    <input name="pasta_drive" type="url" inputmode="url" value="{{ campos.pasta_drive }}">
     <small>4–8 fotos limpas. É o insumo do frame inicial no Nano Banana.</small>
   </label>
 
-  <label>
-    Ângulos
-    <input name="angulos" value="{{ produto.angulos|join(';') if produto else '' }}">
-    <small>separados por ponto e vírgula: frontal;lateral;detalhe-fecho</small>
-  </label>
+  <fieldset class="caixas">
+    <legend>Ângulos disponíveis</legend>
+    <div class="grade-caixas">
+      {% for angulo in angulos_sugeridos %}
+      <label class="caixa">
+        <input type="checkbox" name="angulos" value="{{ angulo }}"
+               {% if angulo in angulos_marcados %}checked{% endif %}>
+        <span>{{ angulo }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <label class="livre">
+      Outros ângulos
+      <input name="angulos_livres" value="{{ angulos_livres }}">
+      <small>separados por ponto e vírgula, para o que não está na lista</small>
+    </label>
+  </fieldset>
 
-  <label>
+  <label for="status">
     Status
-    <select name="status">
+    <select id="status" name="status">
       {% for opcao in status_validos %}
-      <option value="{{ opcao }}"
-        {% if produto and produto.status == opcao %}selected{% endif %}>{{ opcao }}</option>
+      <option value="{{ opcao }}" {% if campos.status == opcao %}selected{% endif %}>{{ opcao }}</option>
       {% endfor %}
     </select>
     <small>só <code>ativo</code> entra no sorteio do briefing</small>
   </label>
 
-  <button class="primario">Salvar</button>
+  <button class="primario" data-aguardando="salvando…">Salvar</button>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // "outra…" revela o campo de texto. O <noscript> acima cobre o caso sem JS,
+  // deixando o campo sempre visivel em vez de inalcancavel.
+  const seletor = document.getElementById('categoria');
+  const campoNovo = document.getElementById('campo-categoria-nova');
+  const entradaNova = campoNovo.querySelector('input');
+
+  function sincronizar() {
+    const livre = seletor.value === '{{ outra_categoria }}';
+    campoNovo.hidden = !livre;
+    entradaNova.required = livre;
+    if (livre) entradaNova.focus();
+  }
+
+  seletor.addEventListener('change', sincronizar);
+</script>
 {% endblock %}

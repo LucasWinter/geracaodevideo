@@ -2,24 +2,31 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
   <title>{% block titulo %}gdv{% endblock %}</title>
   <link rel="stylesheet" href="/static/estilo.css">
 </head>
 <body>
   {% if mostrar_nav is not defined or mostrar_nav %}
+  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+
+  {# /produto/... e uma tela do catalogo: a aba certa a destacar e Catalogo. #}
+  {% set atual = request.url.path %}
+  {% set secao = '/catalogo' if atual.startswith('/produto') else atual %}
   <header class="topo">
-    <nav>
-      <a href="/" class="marca">gdv</a>
-      <a href="/">Briefing</a>
-      <a href="/catalogo">Catálogo</a>
-      <a href="/blocos">Matriz</a>
+    <a href="/" class="marca">gdv</a>
+    <nav aria-label="Seções">
+      {% for href, rotulo in [('/', 'Briefing'), ('/catalogo', 'Catálogo'), ('/blocos', 'Matriz')] %}
+      {% set ativo = (secao == href) if href == '/' else secao.startswith(href) %}
+      <a href="{{ href }}" {% if ativo %}aria-current="page"{% endif %}>{{ rotulo }}</a>
+      {% endfor %}
     </nav>
-    <form method="post" action="/logout"><button class="link">sair</button></form>
+    <form method="post" action="/logout" class="sair"><button class="link">sair</button></form>
   </header>
   {% endif %}
 
-  <main>
+  <main id="conteudo">
     {% block conteudo %}{% endblock %}
   </main>
 
@@ -43,6 +50,28 @@
         selecao.addRange(faixa);
       }
     });
+
+    // Gerar um briefing sao N chamadas ao Gemini: alguns segundos sem nada na
+    // tela. Sem retorno visivel a pessoa clica de novo achando que falhou.
+    document.addEventListener('submit', (evento) => {
+      const formulario = evento.target;
+      const botao = formulario.querySelector('button:not([type=button])');
+      if (!botao || botao.disabled) return;
+      botao.dataset.rotulo = botao.textContent;
+      botao.textContent = botao.dataset.aguardando || 'enviando…';
+      botao.disabled = true;
+    });
+
+    // Voltar pelo historico restaura a pagina do cache com o botao ainda
+    // desabilitado; sem isto o formulario fica morto.
+    window.addEventListener('pageshow', () => {
+      document.querySelectorAll('button[data-rotulo]').forEach((botao) => {
+        botao.textContent = botao.dataset.rotulo;
+        botao.disabled = false;
+        delete botao.dataset.rotulo;
+      });
+    });
   </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

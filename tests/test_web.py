@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from gdv import blocos as mod_blocos
 from gdv.catalogo_supabase import CatalogoSupabase
 from gdv.modelos import Produto
 
@@ -289,6 +290,140 @@ def test_campos_obrigatorios(logado, catalogo_web):
     )
 
     assert "obrigat" in resposta.text
+
+
+# -------------------------------------------------------------------- blocos
+
+def test_categoria_e_um_select_com_as_da_matriz(logado):
+    """Digitar 'bolsa' no singular nao da erro — so encolhe o sorteio calado."""
+    resposta = logado.get("/produto/novo")
+
+    assert '<select id="categoria" name="categoria"' in resposta.text
+    for categoria in ("bolsas", "acessorios", "casa", "cuidados", "moda"):
+        assert f'value="{categoria}"' in resposta.text
+
+
+def test_matriz_quebrada_nao_impede_cadastrar_produto(logado, monkeypatch):
+    """/blocos e /briefing ja reportam esse erro; o cadastro nao deve travar."""
+    def falhar(_):
+        raise mod_blocos.ErroBlocos("blocos.yaml sumiu")
+
+    monkeypatch.setattr("web.main.mod_blocos.carregar", falhar)
+
+    resposta = logado.get("/produto/novo")
+
+    assert resposta.status_code == 200
+    assert 'value="bolsas"' in resposta.text  # veio do catalogo, nao da matriz
+
+
+def test_categoria_do_catalogo_entra_na_lista(logado, catalogo_web):
+    """Produto antigo com categoria fora da matriz nao pode perde-la ao editar."""
+    catalogo_web.salvar_produto(
+        Produto("PET-1", "Coleira", "petshop", 10.0, 0.3, "", "", [], "ativo")
+    )
+
+    resposta = logado.get("/produto/PET-1")
+
+    assert 'value="petshop" selected' in resposta.text
+
+
+def test_categoria_nova_pelo_campo_livre(logado, catalogo_web):
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "PAP-1", "nome": "Caderno", "categoria": "__outra__",
+              "categoria_nova": "Papelaria", "status": "ativo"},
+        follow_redirects=False,
+    )
+
+    assert resposta.status_code == 303
+    assert catalogo_web.buscar_produto("PAP-1").categoria == "papelaria"
+
+
+def test_categoria_vazia_e_recusada_mesmo_com_outra_marcada(logado, catalogo_web):
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "X-1", "nome": "X", "categoria": "__outra__",
+              "categoria_nova": "   ", "status": "ativo"},
+    )
+
+    assert "obrigat" in resposta.text
+    assert catalogo_web.buscar_produto("X-1") is None
+
+
+def test_angulos_vem_das_caixas_marcadas(logado, catalogo_web):
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "ANG-1", "nome": "X", "categoria": "casa", "status": "ativo",
+              "angulos": ["frontal", "em-uso"], "angulos_livres": "de-cima; frontal"},
+        follow_redirects=False,
+    )
+
+    assert resposta.status_code == 303
+    # 'frontal' repetido entre caixa e campo livre entra uma vez so.
+    assert catalogo_web.buscar_produto("ANG-1").angulos == ["frontal", "em-uso", "de-cima"]
+
+
+def test_formulario_remarca_os_angulos_salvos(logado, catalogo_web):
+    catalogo_web.salvar_produto(
+        Produto("ANG-2", "X", "casa", 1.0, 0.1, "", "", ["lateral", "macro-costura"], "ativo")
+    )
+
+    # Sem normalizar, a assercao passaria a depender da indentacao do template.
+    html = " ".join(logado.get("/produto/ANG-2").text.split())
+
+    assert 'value="lateral" checked' in html
+    assert 'value="frontal" checked' not in html
+    assert 'name="angulos_livres" value="macro-costura"' in html
+
+
+def test_erro_no_formulario_preserva_o_que_foi_digitado(logado):
+    """Antes o formulario voltava em branco e perdia tudo por causa do preco."""
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "X-1", "nome": "Nome Digitado", "categoria": "casa",
+              "preco": "quarenta", "status": "ativo", "angulos": ["frontal"]},
+    )
+
+    assert "numeros" in resposta.text
+    assert 'value="Nome Digitado"' in resposta.text
+    assert 'value="casa" selected' in resposta.text
+
+
+def test_quantidade_do_briefing_e_um_select(logado):
+    resposta = logado.get("/")
+
+    assert '<select id="qtd" name="qtd">' in resposta.text
+    assert '<option value="20"' in resposta.text
+
+
+# -------------------------------------------------------------- navegacao
+
+def test_aba_atual_e_marcada(logado):
+    assert 'href="/catalogo" aria-current="page"' in logado.get("/catalogo").text
+
+
+def test_tela_de_produto_destaca_o_catalogo(logado):
+    """/produto/... e uma tela do catalogo; destacar Briefing confundiria."""
+    resposta = logado.get("/produto/BLS-001")
+
+    assert 'href="/catalogo" aria-current="page"' in resposta.text
+
+
+def test_dia_passado_nao_oferece_gerar(logado):
+    """O briefing so e gerado para hoje — botao em outro dia mentiria."""
+    resposta = logado.get("/?data=2020-01-01")
+
+    assert "2020-01-01" in resposta.text
+    assert "Gerar briefing de hoje" not in resposta.text
+
+
+def test_data_invalida_na_url_cai_para_hoje(logado):
+    from datetime import date
+
+    resposta = logado.get("/?data=nao-e-data")
+
+    assert resposta.status_code == 200
+    assert date.today().isoformat() in resposta.text
 
 
 # -------------------------------------------------------------------- blocos

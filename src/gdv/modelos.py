@@ -12,6 +12,23 @@ EIXOS = ("gancho_pov", "cenario", "camera", "iluminacao", "detalhe_close", "ritm
 STATUS_PRODUTO = ("ativo", "pausado", "esgotado")
 STATUS_VIDEO = ("briefado", "gerado", "montado", "postado")
 
+# Angulos de foto que o redator recebe como `angulos_disponiveis`. Diferente de
+# EIXOS e STATUS_*, esta lista nao valida nada: e so a sugestao que o formulario
+# oferece como caixas de selecao. Produto com angulo fora dela continua valido —
+# o campo livre do formulario existe justamente para isso.
+ANGULOS_SUGERIDOS = (
+    "frontal",
+    "lateral",
+    "traseira",
+    "superior",
+    "detalhe-textura",
+    "detalhe-fecho",
+    "em-uso",
+    "escala-mao",
+    "interior",
+    "embalagem",
+)
+
 
 @dataclass(frozen=True)
 class Produto:
