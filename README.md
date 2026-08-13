@@ -169,6 +169,22 @@ Duas armadilhas já pagas por este projeto:
   `"framework": "fastapi"` no `vercel.json`, um projeto importado com preset "Other" não roda
   detecção nenhuma e publica saída vazia.
 
+### Criar usuários
+
+Pelo painel do Supabase: **Authentication → Users → Add user**. Ou pelo `signUp` da API.
+
+**Nunca por `INSERT` direto em `auth.users`.** O GoTrue exige uma linha correspondente em
+`auth.identities` para login por e-mail; sem ela o usuário existe, tem senha, aparece na listagem — e
+o login falha com "Invalid login credentials", além de a gestão pelo painel ficar inconsistente. Este
+projeto já pagou esse erro: o primeiro usuário foi criado por SQL e ficou com `identities = 0`.
+
+Se acontecer de novo, o diagnóstico é uma consulta:
+
+```sql
+select u.email, (select count(*) from auth.identities i where i.user_id = u.id) as identities
+from auth.users u;
+```
+
 ### Segurança
 
 RLS ligada nas duas tabelas, com acesso apenas para `authenticated` — visitante
