@@ -173,17 +173,28 @@ Duas armadilhas já pagas por este projeto:
 
 Pelo painel do Supabase: **Authentication → Users → Add user**. Ou pelo `signUp` da API.
 
-**Nunca por `INSERT` direto em `auth.users`.** O GoTrue exige uma linha correspondente em
-`auth.identities` para login por e-mail; sem ela o usuário existe, tem senha, aparece na listagem — e
-o login falha com "Invalid login credentials", além de a gestão pelo painel ficar inconsistente. Este
-projeto já pagou esse erro: o primeiro usuário foi criado por SQL e ficou com `identities = 0`.
+**Nunca por `INSERT` direto em `auth.users`.** Este projeto pagou esse erro duas vezes, e a linha
+criada por SQL parece perfeita — existe, tem senha, está confirmada, aparece na listagem — e mesmo
+assim nada funciona. São duas faltas distintas:
 
-Se acontecer de novo, o diagnóstico é uma consulta:
+1. **Sem linha em `auth.identities`**, o login por e-mail falha com "Invalid login credentials".
+2. **Colunas de token em `NULL`** (`confirmation_token`, `recovery_token`, `email_change`,
+   `email_change_token_new`, ...). O GoTrue lê essas colunas em `string` do Go, não em ponteiro:
+   `NULL` estoura o scan e vira **"Database error loading user"** — no login e ao tentar excluir o
+   usuário pelo painel. A API sempre grava string vazia, nunca `NULL`.
+
+Diagnóstico das duas de uma vez:
 
 ```sql
-select u.email, (select count(*) from auth.identities i where i.user_id = u.id) as identities
+select u.email,
+       (select count(*) from auth.identities i where i.user_id = u.id) as identities,
+       (u.confirmation_token is null or u.recovery_token is null
+        or u.email_change is null or u.email_change_token_new is null) as tokens_nulos
 from auth.users u;
 ```
+
+`identities = 0` ou `tokens_nulos = true` explicam qualquer falha de autenticação.
+(`phone` em `NULL` é normal para usuário de e-mail.)
 
 ### Segurança
 
