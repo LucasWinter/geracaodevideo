@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from api.index import _diagnostico, criar_app_de_erro
+from web.asgi import _diagnostico, criar_app_de_erro
 
 
 def _chamar(app, caminho: str = "/saude") -> tuple[int, dict, bytes]:
@@ -33,7 +33,7 @@ def _chamar(app, caminho: str = "/saude") -> tuple[int, dict, bytes]:
 
 def test_app_normal_e_o_painel():
     """Com tudo instalado, o entrypoint serve o app de verdade."""
-    from api.index import app
+    from web.asgi import app
 
     assert app.title == "gdv"
 

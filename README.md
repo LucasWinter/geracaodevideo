@@ -111,8 +111,22 @@ uvicorn web.main:app --reload
 
 ### Deploy
 
-O `vercel.json` já manda tudo para `api/index.py` e fixa `maxDuration: 60` — a
-geração dispara N chamadas ao Gemini em paralelo, e sequencial estouraria o limite.
+O projeto roda no **modo framework Python** da Vercel. Isso não é uma escolha de configuração: a doc
+da Vercel diz que declarar dependências em `pyproject.toml` *"enables automatic framework detection"*,
+e ter `fastapi` em `[project].dependencies` já basta para ativá-lo.
+
+Nesse modo a Vercel resolve **um** entrypoint ASGI e serve o app inteiro por ele — não existe
+diretório `api/` com funções, e não há `vercel.json`. O entrypoint é declarado no `pyproject.toml`:
+
+```toml
+[tool.vercel]
+entrypoint = "web.asgi:app"
+```
+
+**As duas coisas andam juntas.** Se alguém mover `fastapi` de volta para um extra, a Vercel volta ao
+modo clássico e o entrypoint deixa de ser encontrado. Se alguém recriar `api/index.py` com um bloco
+`functions` no `vercel.json`, o build falha em 1 segundo com *"pattern doesn't match any Serverless
+Functions"* — foi assim que este projeto perdeu três deploys.
 
 Variáveis obrigatórias no projeto da Vercel:
 
@@ -122,9 +136,11 @@ Variáveis obrigatórias no projeto da Vercel:
 | `SUPABASE_ANON_KEY` | chave pública; a RLS é quem protege os dados |
 | `GEMINI_API_KEY` | opcional — sem ela o site redige por template |
 
-`SUPABASE_EMAIL` e `SUPABASE_SENHA` **não** vão para a Vercel: no site quem
-autentica é você, pelo formulário de login. Elas só existem no `.env` local, para
-a CLI.
+`SUPABASE_EMAIL` e `SUPABASE_SENHA` **não** vão para a Vercel: no site quem autentica é você, pelo
+formulário de login. Elas só existem no `.env` local, para a CLI.
+
+Pendência conhecida: `maxDuration` não está configurado. Em app de framework Python ele usa o caminho
+do entrypoint resolvido, e vale confirmar esse caminho num build verde antes de mexer.
 
 ### Quando o deploy quebrar
 
@@ -134,9 +150,13 @@ estão definidas. Ela reporta só booleanos, nunca o valor de uma variável.
 
 É o caminho mais curto para diagnosticar um `FUNCTION_INVOCATION_FAILED` sem caçar log.
 
-Uma armadilha já paga por este projeto: **a Vercel instala a partir do `pyproject.toml` e não instala
-extras**. Toda dependência que o site precisa tem que estar em `[project].dependencies` — se voltar
-para `[project.optional-dependencies]`, o build passa e a função morre no primeiro import.
+Duas armadilhas já pagas por este projeto:
+
+- **A Vercel instala a partir do `pyproject.toml` e não instala extras.** Toda dependência do site
+  tem que estar em `[project].dependencies`; em `[project.optional-dependencies]` o build passa e a
+  função morre no primeiro import.
+- **Falha de build em ~1 segundo não é build, é config rejeitada** — acontece antes de instalar
+  qualquer coisa. Vá direto ao log do *build* (não ao de runtime): ele nomeia o problema.
 
 ### Segurança
 

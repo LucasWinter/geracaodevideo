@@ -25,6 +25,11 @@ dev = ["pytest>=7.4", "httpx>=0.27", "uvicorn>=0.30"]
 [project.scripts]
 gdv = "gdv.cli:main"
 
+# Declarar fastapi em [project].dependencies ativa a deteccao de framework da
+# Vercel, que resolve um unico entrypoint ASGI em vez de funcoes em api/.
+[tool.vercel]
+entrypoint = "web.asgi:app"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

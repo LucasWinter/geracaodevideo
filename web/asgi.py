@@ -1,8 +1,14 @@
 """Entrypoint ASGI para a Vercel.
 
-A Vercel serve funcoes a partir de /api. O pacote `gdv` vive em src/, entao
-entra no sys.path antes do import do app — necessario quando o projeto nao foi
-instalado no ambiente da funcao.
+Declarado em pyproject.toml como `[tool.vercel] entrypoint = "web.asgi:app"`.
+
+Este projeto roda no modo "framework Python" da Vercel: declarar fastapi em
+[project].dependencies ativa a deteccao automatica de framework, e nesse modo a
+Vercel resolve UM entrypoint ASGI e serve o app inteiro por ele — o diretorio
+`api/` nao gera funcoes. Por isso ele nao existe mais aqui.
+
+O pacote `gdv` vive em src/ e entra no sys.path antes do import do app, caso o
+projeto nao tenha sido instalado no ambiente da funcao.
 
 Se o import do painel falhar, este modulo NAO deixa a funcao morrer: serve um
 app ASGI minimo que responde o diagnostico completo em JSON. Um crash de import
