@@ -7,6 +7,11 @@ build/
 dist/
 .venv/
 
+# Skills instaladas por `npx skills add`: 3,6 MB de dados de terceiros.
+# O `skills-lock.json` versionado guarda origem e hash, entao um clone
+# reinstala a mesma versao sem carregar o peso no repositorio.
+.claude/skills/
+
 # Material de trabalho: clipes baixados do Flow e arquivos finais
 entrada/
 saida/
