@@ -94,17 +94,36 @@ OUTRA_CATEGORIA = "__outra__"
 MINIMO_SENHA = 8
 
 
-def matriz_de(catalogo) -> mod_blocos.MatrizBlocos:
-    """A matriz do YAML somada aos parametros criados no painel.
+def parametros_seguros(catalogo) -> tuple[list, str]:
+    """Os parametros do painel, ou lista vazia e o motivo da falha.
+
+    A tabela `parametros` e uma extensao opcional: sem ela a matriz do
+    blocos.yaml sozinha gera o dia inteiro. Deixar o erro subir faz uma tabela
+    nova derrubar briefing, catalogo, cadastro de produto e matriz de uma vez,
+    porque `parametros()` passou a ser chamado em quase toda pagina — foi
+    exatamente o que aconteceu quando ela foi criada e o cache de schema do
+    PostgREST ainda nao a enxergava.
+
+    O motivo volta junto para virar aviso na tela em vez de 500 mudo.
+    """
+    try:
+        return catalogo.parametros(), ""
+    except ErroCatalogo as exc:
+        return [], str(exc)
+
+
+def matriz_de(catalogo) -> tuple[mod_blocos.MatrizBlocos, str]:
+    """A matriz do YAML somada aos parametros do painel, mais o aviso de falha.
 
     Toda leitura da matriz passa por aqui — briefing, tela de blocos, tela de
     parametros. Se o site enxergasse uma matriz e a CLI outra, `hash_combinacao`
     daria valores diferentes e a janela anti-repeticao de um nao veria o outro.
     """
-    return mod_blocos.mesclar(mod_blocos.carregar(BLOCOS), catalogo.parametros())
+    parametros, aviso = parametros_seguros(catalogo)
+    return mod_blocos.mesclar(mod_blocos.carregar(BLOCOS), parametros), aviso
 
 
-def opcoes_de_categoria(catalogo) -> list[str]:
+def opcoes_de_categoria(catalogo, parametros: Sequence) -> list[str]:
     """Categorias da matriz, das criadas no painel e das que ja existem no catalogo.
 
     A matriz manda: valor de bloco com `categorias` so entra no sorteio se casar
@@ -112,7 +131,6 @@ def opcoes_de_categoria(catalogo) -> list[str]:
     editar um produto antigo nao perca a categoria dele so por ela nao estar no
     blocos.yaml.
     """
-    parametros = catalogo.parametros()
     try:
         conhecidas = set(mod_blocos.mesclar(mod_blocos.carregar(BLOCOS), parametros).categorias())
     except (mod_blocos.ErroBlocos, OSError):
@@ -125,9 +143,9 @@ def opcoes_de_categoria(catalogo) -> list[str]:
     return sorted(c for c in conhecidas if c)
 
 
-def opcoes_de_angulo(catalogo) -> list[str]:
+def opcoes_de_angulo(parametros: Sequence) -> list[str]:
     """Os angulos fixos do codigo mais os criados no painel."""
-    extras = [p.texto for p in catalogo.parametros() if p.tipo == "angulo"]
+    extras = [p.texto for p in parametros if p.tipo == "angulo"]
     vistos = {a.lower() for a in ANGULOS_SUGERIDOS}
     return list(ANGULOS_SUGERIDOS) + [a for a in extras if a.lower() not in vistos]
 
@@ -198,7 +216,10 @@ def campos_de(produto: Produto | None) -> dict:
 
 def _form_produto(request: Request, campos: dict, *, existente: bool, erro: str | None):
     catalogo = catalogo_de(request)
-    angulos = opcoes_de_angulo(catalogo)
+    # Uma leitura de parametros por requisicao: antes este formulario chamava
+    # `parametros()` duas vezes, uma por lista, e cada chamada e uma ida a rede.
+    parametros, aviso = parametros_seguros(catalogo)
+    angulos = opcoes_de_angulo(parametros)
     marcados, livres = separar_angulos(campos["angulos"], angulos)
     return _pagina(
         request,
@@ -208,11 +229,52 @@ def _form_produto(request: Request, campos: dict, *, existente: bool, erro: str 
         angulos_livres=livres,
         existente=existente,
         erro=erro,
+        aviso_parametros=aviso,
         status_validos=STATUS_PRODUTO,
-        categorias=opcoes_de_categoria(catalogo),
+        categorias=opcoes_de_categoria(catalogo, parametros),
         angulos_sugeridos=angulos,
         outra_categoria=OUTRA_CATEGORIA,
         hoje=date.today().isoformat(),  # so para o exemplo de nome de arquivo
+    )
+
+
+# ------------------------------------------------------------ paginas de erro
+
+def _pagina_de_erro(request: Request, titulo: str, detalhe: str, explicacao: str):
+    return templates.TemplateResponse(
+        request,
+        "erro.html",
+        {"titulo": titulo, "detalhe": detalhe, "explicacao": explicacao},
+        status_code=500,
+    )
+
+
+@app.exception_handler(ErroCatalogo)
+def erro_de_dados(request: Request, exc: ErroCatalogo):
+    """Falha de Supabase vira pagina legivel, nao 500 em branco."""
+    return _pagina_de_erro(
+        request,
+        "Não consegui falar com o banco",
+        str(exc),
+        "Costuma ser sessão expirada, RLS negando a consulta ou tabela que o "
+        "PostgREST ainda não enxerga. Sair e entrar de novo resolve o primeiro caso.",
+    )
+
+
+@app.exception_handler(Exception)
+def erro_inesperado(request: Request, exc: Exception):
+    """Ultimo recurso: mostrar a causa em vez de "Internal Server Error".
+
+    Sem isto, depurar o deploy exige o log da Vercel — e quem toca o painel nem
+    sempre tem acesso a ele. Vai o tipo e a mensagem, nunca o traceback nem
+    valor de variavel de ambiente; o traceback fica no log da funcao.
+    """
+    return _pagina_de_erro(
+        request,
+        "Algo quebrou nesta página",
+        f"{type(exc).__name__}: {exc}",
+        "O traceback completo está no log da função na Vercel. Se a mensagem "
+        "citar um módulo ausente, ele precisa estar em [project].dependencies.",
     )
 
 
@@ -241,7 +303,41 @@ def saude():
             nome: bool(os.environ.get(nome, "").strip())
             for nome in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "GEMINI_API_KEY")
         },
+        "tabelas": _tabelas_alcancaveis(),
     }
+
+
+def _tabelas_alcancaveis() -> dict[str, str]:
+    """Diz se o PostgREST conhece cada tabela, sem precisar de sessao.
+
+    Como anonimo a RLS nega a leitura — e tudo bem: negar prova que a tabela
+    existe. O que interessa distinguir e "nao encontrada" (tabela ausente ou
+    fora do cache de schema do PostgREST) de "sem permissao". Sem isso, uma
+    tabela recem-criada aparece como 500 em toda pagina e nao ha como
+    diagnosticar sem o log da Vercel.
+    """
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    chave = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+    if not url or not chave:
+        return {"_": "SUPABASE_URL/ANON_KEY nao configurados"}
+
+    try:
+        from supabase import create_client
+
+        cliente = create_client(url, chave)
+    except Exception as exc:
+        return {"_": f"{type(exc).__name__}: {exc}"[:200]}
+
+    resultado = {}
+    for tabela in ("produtos", "videos", "parametros"):
+        try:
+            cliente.table(tabela).select("*").limit(1).execute()
+            resultado[tabela] = "ok"
+        except Exception as exc:
+            # Mensagem truncada: basta para reconhecer PGRST205 (tabela fora do
+            # cache) ou 42501 (RLS), que sao os dois casos que importam.
+            resultado[tabela] = f"{type(exc).__name__}: {exc}"[:200]
+    return resultado
 
 
 # ------------------------------------------------------------------- sessao
@@ -408,7 +504,7 @@ async def gerar_briefing(request: Request, qtd: int = Form(5)):
         )
 
     try:
-        matriz = matriz_de(catalogo)
+        matriz, _ = matriz_de(catalogo)
         produtos = mod_briefing.selecionar_produtos(
             catalogo.produtos_ativos(), catalogo.contagem_por_sku(), max(1, min(qtd, 20))
         )
@@ -539,11 +635,13 @@ def salvar_produto(
 def ver_blocos(request: Request):
     """So leitura. Para acrescentar valor sem deploy, a tela e /parametros."""
     catalogo = catalogo_de(request)
-    matriz = matriz_de(catalogo)
-    do_painel = {
-        (p.eixo, p.chave) for p in catalogo.parametros() if p.tipo == "eixo"
-    }
-    return _pagina(request, "blocos.html", matriz=matriz, eixos=EIXOS, do_painel=do_painel)
+    parametros, aviso = parametros_seguros(catalogo)
+    matriz = mod_blocos.mesclar(mod_blocos.carregar(BLOCOS), parametros)
+    do_painel = {(p.eixo, p.chave) for p in parametros if p.tipo == "eixo"}
+    return _pagina(
+        request, "blocos.html", matriz=matriz, eixos=EIXOS,
+        do_painel=do_painel, aviso_parametros=aviso,
+    )
 
 
 # ---------------------------------------------------------------- parametros
@@ -551,7 +649,7 @@ def ver_blocos(request: Request):
 @app.get("/parametros", response_class=HTMLResponse)
 def ver_parametros(request: Request):
     catalogo = catalogo_de(request)
-    parametros = catalogo.parametros()
+    parametros, aviso = parametros_seguros(catalogo)
     try:
         matriz = mod_blocos.carregar(BLOCOS)
     except (mod_blocos.ErroBlocos, OSError):
@@ -561,6 +659,7 @@ def ver_parametros(request: Request):
         request,
         "parametros.html",
         parametros=parametros,
+        aviso_parametros=aviso,
         eixos=EIXOS,
         # Um valor existente por eixo, para o formulario mostrar o estilo de
         # descritor em ingles que funciona — copiar um modelo e mais facil que
@@ -568,7 +667,7 @@ def ver_parametros(request: Request):
         exemplos={
             eixo: matriz.eixos[eixo][0] for eixo in EIXOS
         } if matriz else {},
-        categorias=opcoes_de_categoria(catalogo),
+        categorias=opcoes_de_categoria(catalogo, parametros),
         erro=request.query_params.get("erro"),
     )
 

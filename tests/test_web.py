@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from gdv import blocos as mod_blocos
+from gdv.catalogo import ErroCatalogo
 from gdv.catalogo_supabase import CatalogoSupabase
 from gdv.modelos import Produto
 
@@ -32,6 +33,17 @@ def logado(catalogo_web, monkeypatch) -> TestClient:
     monkeypatch.setattr(mod_auth, "catalogo_da_requisicao", lambda _: catalogo_web)
     monkeypatch.setattr("web.main.auth.catalogo_da_requisicao", lambda _: catalogo_web)
     return TestClient(app)
+
+
+@pytest.fixture
+def logado_sem_estourar(catalogo_web, monkeypatch) -> TestClient:
+    """Como `logado`, mas deixa a excecao virar resposta em vez de subir.
+
+    E o comportamento da producao: o handler transforma o erro em pagina. O
+    TestClient, por padrao, relanca antes disso e esconderia a pagina.
+    """
+    monkeypatch.setattr("web.main.auth.catalogo_da_requisicao", lambda _: catalogo_web)
+    return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture
@@ -702,3 +714,135 @@ def test_trocar_senha_recusa_divergente(logado, monkeypatch):
 
 def test_login_oferece_recuperacao(deslogado):
     assert 'href="/recuperar"' in deslogado.get("/login").text
+
+
+# ------------------------------------- degradacao quando parametros falha
+
+@pytest.fixture
+def parametros_quebrados(catalogo_web, monkeypatch):
+    """Simula a tabela `parametros` inacessivel — PostgREST sem a tabela no
+    cache de schema, RLS negando, rede caindo. Todos chegam como ErroCatalogo."""
+    def falhar():
+        raise ErroCatalogo("consulta ao Supabase falhou: relacao nao encontrada")
+
+    monkeypatch.setattr(catalogo_web, "parametros", falhar)
+    return catalogo_web
+
+
+# As telas que leem a tabela. `/` e `/catalogo` ficam de fora de proposito:
+# nenhuma das duas chama `parametros()`, entao nunca quebraram por causa dela.
+LEEM_PARAMETROS = ["/produto/novo", "/produto/BLS-001", "/blocos", "/parametros"]
+
+
+@pytest.mark.parametrize("caminho", LEEM_PARAMETROS)
+def test_parametros_indisponivel_nao_derruba_a_pagina(logado, parametros_quebrados, caminho):
+    """Tabela opcional nao pode virar 500.
+
+    Foi o que aconteceu quando ela foi criada: `parametros()` entrou no
+    formulario de produto, na matriz e na geracao do briefing, e o erro subia
+    sem ninguem capturar.
+    """
+    resposta = logado.get(caminho)
+
+    assert resposta.status_code == 200
+    assert "Parâmetros do painel indisponíveis" in resposta.text
+
+
+@pytest.mark.parametrize("caminho", ["/", "/catalogo"])
+def test_paginas_que_nao_leem_parametros_seguem_iguais(logado, parametros_quebrados, caminho):
+    resposta = logado.get(caminho)
+
+    assert resposta.status_code == 200
+    assert "Parâmetros do painel indisponíveis" not in resposta.text
+
+
+def test_briefing_ainda_gera_sem_a_tabela_de_parametros(logado, parametros_quebrados):
+    """A matriz do blocos.yaml sozinha gera o dia inteiro."""
+    resposta = logado.post("/briefing", data={"qtd": 2}, follow_redirects=False)
+
+    assert resposta.status_code == 303
+    assert len(parametros_quebrados.videos()) == 2
+
+
+def test_aviso_mostra_o_motivo_da_falha(logado, parametros_quebrados):
+    """Sem o motivo na tela, so restaria caçar log da Vercel."""
+    resposta = logado.get("/parametros")
+
+    assert "relacao nao encontrada" in resposta.text
+
+
+def test_sem_falha_nao_ha_aviso(logado):
+    assert "Parâmetros do painel indisponíveis" not in logado.get("/").text
+
+
+# ------------------------------------------------------------ paginas de erro
+
+def test_falha_do_banco_vira_pagina_legivel(logado_sem_estourar, catalogo_web, monkeypatch):
+    """500 em branco obriga a caçar log da Vercel, que nem todo mundo tem."""
+    def falhar():
+        raise ErroCatalogo("consulta ao Supabase falhou: JWT expired")
+
+    monkeypatch.setattr(catalogo_web, "produtos", falhar)
+
+    resposta = logado_sem_estourar.get("/catalogo")
+
+    assert resposta.status_code == 500
+    assert "JWT expired" in resposta.text
+    assert "Não consegui falar com o banco" in resposta.text
+
+
+def test_erro_inesperado_mostra_tipo_e_mensagem(logado_sem_estourar, catalogo_web, monkeypatch):
+    def explodir():
+        raise RuntimeError("algo bem inesperado")
+
+    monkeypatch.setattr(catalogo_web, "videos", explodir)
+
+    resposta = logado_sem_estourar.get("/")
+
+    assert resposta.status_code == 500
+    assert "RuntimeError: algo bem inesperado" in resposta.text
+
+
+def test_pagina_de_erro_nao_vaza_variavel_de_ambiente(logado_sem_estourar, catalogo_web, monkeypatch):
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "chave-secreta-nao-pode-vazar")
+
+    def explodir():
+        raise RuntimeError("falhou")
+
+    monkeypatch.setattr(catalogo_web, "videos", explodir)
+
+    resposta = logado_sem_estourar.get("/")
+
+    assert "chave-secreta-nao-pode-vazar" not in resposta.text
+
+
+def test_pagina_de_erro_aponta_o_diagnostico(logado_sem_estourar, catalogo_web, monkeypatch):
+    monkeypatch.setattr(catalogo_web, "videos", lambda: (_ for _ in ()).throw(RuntimeError("x")))
+
+    assert 'href="/saude"' in logado_sem_estourar.get("/").text
+
+
+def test_saude_reporta_alcance_das_tabelas(deslogado, monkeypatch):
+    """Foi o que faltou quando `parametros` virou 500: saber se ela existe."""
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+
+    dados = deslogado.get("/saude").json()
+
+    assert "tabelas" in dados
+    assert "nao configurados" in dados["tabelas"]["_"]
+
+
+def test_saude_nunca_quebra_por_causa_da_checagem_de_tabela(deslogado, monkeypatch):
+    """/saude e a rota que serve quando tudo mais falhou: nao pode falhar junto."""
+    monkeypatch.setenv("SUPABASE_URL", "https://exemplo.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "chave")
+    monkeypatch.setattr(
+        "supabase.create_client",
+        lambda *_, **__: (_ for _ in ()).throw(RuntimeError("sem rede")),
+    )
+
+    resposta = deslogado.get("/saude")
+
+    assert resposta.status_code == 200
+    assert "sem rede" in resposta.json()["tabelas"]["_"]

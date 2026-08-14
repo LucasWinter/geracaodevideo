@@ -250,6 +250,34 @@ formulário de login. Elas só existem no `.env` local, para a CLI.
 Pendência conhecida: `maxDuration` não está configurado. Em app de framework Python ele usa o caminho
 do entrypoint resolvido, e vale confirmar esse caminho num build verde antes de mexer.
 
+### Quando uma página der erro
+
+O painel não responde mais "Internal Server Error" em branco. Falha de banco vira uma página que
+mostra a mensagem do Supabase; qualquer outra exceção vira uma página com o tipo e a mensagem. O
+traceback fica no log da função — a página nunca mostra valor de variável de ambiente.
+
+**`/saude` é o primeiro lugar a olhar**, e é público de propósito: serve justamente quando o login não
+funciona. Além dos módulos e arquivos, ele agora reporta `tabelas`, testando cada tabela como
+anônimo. Ler o resultado:
+
+| resposta | significa |
+|---|---|
+| `"ok"` | tabela existe e o PostgREST a conhece |
+| erro citando `42501` ou RLS | tabela existe; a RLS negou porque a chamada é anônima — **correto** |
+| erro citando `PGRST205` / "schema cache" | o PostgREST não enxerga a tabela |
+
+O último caso é o que derrubou o painel quando a tabela `parametros` foi criada: o PostgREST mantém um
+cache do schema e não o recarrega sozinho na hora. A correção é `notify pgrst, 'reload schema';` no SQL
+Editor do Supabase.
+
+Duas lições que o código agora fixa:
+
+- **Tabela nova é opcional até prova em contrário.** `parametros_seguros()` captura a falha e o site
+  segue com a matriz do `blocos.yaml`, mostrando um aviso. Uma tabela recém-criada não pode derrubar o
+  formulário de produto, a matriz e a geração do briefing de uma vez.
+- **O erro tem que aparecer no navegador.** Sem log acessível, um 500 mudo custa um ciclo inteiro de
+  ida e volta para descobrir o que já era conhecido do servidor.
+
 ### Quando o deploy quebrar
 
 Abra **`/saude`** — rota pública que responde JSON dizendo o que falta: quais módulos importam, se

@@ -33,6 +33,15 @@
   {% endif %}
 
   <main id="conteudo">
+    {# A tabela de parametros e opcional: se ela falhar, o site segue com a
+       matriz do blocos.yaml e diz o motivo aqui, em vez de responder 500. #}
+    {% if aviso_parametros %}
+    <p class="erro" role="alert">
+      Parâmetros do painel indisponíveis — usando só o <code>blocos.yaml</code>.
+      <br><span class="discreto">{{ aviso_parametros }}</span>
+    </p>
+    {% endif %}
+
     {% block conteudo %}{% endblock %}
   </main>
 
