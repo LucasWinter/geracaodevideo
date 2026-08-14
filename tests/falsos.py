@@ -22,11 +22,16 @@ class ConsultaFalsa:
         self.operacao = operacao
         self.carga = carga
         self.filtros: list[tuple[str, Any]] = []
+        self.conjuntos: list[tuple[str, list[str]]] = []
         self.ordens: list[tuple[str, bool]] = []
         self.limite: int | None = None
 
     def eq(self, coluna: str, valor: Any) -> "ConsultaFalsa":
         self.filtros.append((coluna, valor))
+        return self
+
+    def in_(self, coluna: str, valores: Any) -> "ConsultaFalsa":
+        self.conjuntos.append((coluna, [str(v) for v in valores]))
         return self
 
     def order(self, coluna: str, desc: bool = False) -> "ConsultaFalsa":
@@ -39,7 +44,9 @@ class ConsultaFalsa:
 
     def _casam(self, linha: dict[str, Any]) -> bool:
         # Compara como texto: o PostgREST aceita eq('id', '3') com coluna bigint.
-        return all(str(linha.get(coluna)) == str(valor) for coluna, valor in self.filtros)
+        if not all(str(linha.get(coluna)) == str(valor) for coluna, valor in self.filtros):
+            return False
+        return all(str(linha.get(c)) in vs for c, vs in self.conjuntos)
 
     def execute(self) -> Resposta:
         if self.operacao == "delete":

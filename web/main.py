@@ -28,7 +28,8 @@ from gdv import briefing as mod_briefing
 from gdv.catalogo import ErroCatalogo
 from gdv.diagnostico import modulo_disponivel
 from gdv.modelos import (
-    ANGULOS_SUGERIDOS,
+    ANGULOS_DETALHADOS,
+    DESCRICAO_EIXO,
     EIXOS,
     STATUS_PRODUTO,
     TIPOS_PARAMETRO,
@@ -143,11 +144,25 @@ def opcoes_de_categoria(catalogo, parametros: Sequence) -> list[str]:
     return sorted(c for c in conhecidas if c)
 
 
-def opcoes_de_angulo(parametros: Sequence) -> list[str]:
-    """Os angulos fixos do codigo mais os criados no painel."""
-    extras = [p.texto for p in parametros if p.tipo == "angulo"]
-    vistos = {a.lower() for a in ANGULOS_SUGERIDOS}
-    return list(ANGULOS_SUGERIDOS) + [a for a in extras if a.lower() not in vistos]
+def opcoes_de_angulo(parametros: Sequence) -> list[dict]:
+    """Os angulos de fabrica mais os criados no painel, cada um explicado.
+
+    Devolve dicionarios, nao strings: "frontal" sozinho nao diz a quem fotografa
+    o que precisa estar no quadro. O `id` continua sendo o que vai para o banco.
+    """
+    opcoes = [
+        {"id": id_, "rotulo": rotulo, "descricao": descricao}
+        for id_, rotulo, descricao in ANGULOS_DETALHADOS
+    ]
+    vistos = {o["id"].lower() for o in opcoes}
+
+    for p in parametros:
+        if p.tipo == "angulo" and p.texto.lower() not in vistos:
+            vistos.add(p.texto.lower())
+            opcoes.append(
+                {"id": p.texto, "rotulo": p.texto, "descricao": p.descricao}
+            )
+    return opcoes
 
 
 def normalizar_angulos(marcados: list[str], livres: str) -> list[str]:
@@ -220,7 +235,7 @@ def _form_produto(request: Request, campos: dict, *, existente: bool, erro: str 
     # `parametros()` duas vezes, uma por lista, e cada chamada e uma ida a rede.
     parametros, aviso = parametros_seguros(catalogo)
     angulos = opcoes_de_angulo(parametros)
-    marcados, livres = separar_angulos(campos["angulos"], angulos)
+    marcados, livres = separar_angulos(campos["angulos"], [a["id"] for a in angulos])
     return _pagina(
         request,
         "produto.html",
@@ -487,32 +502,22 @@ def briefing_de_hoje(request: Request, data: str | None = None):
         dia_seguinte=(dia_data + timedelta(days=1)).isoformat(),
         videos=videos,
         produtos=produtos,
+        ativos=[p for p in produtos.values() if p.status == "ativo"],
         qtds=QTDS_BRIEFING,
         erro=request.query_params.get("erro"),
     )
 
 
-@app.post("/briefing")
-async def gerar_briefing(request: Request, qtd: int = Form(5)):
-    catalogo = catalogo_de(request)
-    dia = date.today().isoformat()
+async def _redigir(catalogo, matriz, produtos, dia: str, excluir: Sequence[str] = ()):
+    """Sorteia e redige um video por produto. Nao persiste nada.
 
-    if any(v.data == dia for v in catalogo.videos()):
-        return RedirectResponse(
-            "/?erro=Ja+existe+briefing+para+hoje.+Gere+amanha+ou+apague+os+de+hoje.",
-            status_code=303,
-        )
-
-    try:
-        matriz, _ = matriz_de(catalogo)
-        produtos = mod_briefing.selecionar_produtos(
-            catalogo.produtos_ativos(), catalogo.contagem_por_sku(), max(1, min(qtd, 20))
-        )
-        combinacoes = sortear_lote(
-            produtos, matriz, catalogo.hashes_recentes(mod_briefing.JANELA_PADRAO), random.Random()
-        )
-    except (ValueError, EspacoCombinatorioEsgotado, mod_blocos.ErroBlocos) as exc:
-        return RedirectResponse(f"/?erro={exc}", status_code=303)
+    `excluir` soma hashes a janela de anti-repeticao so nesta rodada. E o que
+    faz o "refazer" entregar combinacoes diferentes das que acabaram de ser
+    descartadas, sem que elas voltem a ocupar a janela para sempre — a linha ja
+    foi apagada do log, entao para as proximas geracoes elas nao existiram.
+    """
+    recentes = list(catalogo.hashes_recentes(mod_briefing.JANELA_PADRAO)) + list(excluir)
+    combinacoes = sortear_lote(produtos, matriz, recentes, random.Random())
 
     redator = criar_redator(matriz.termos_proibidos)
 
@@ -525,13 +530,113 @@ async def gerar_briefing(request: Request, qtd: int = Form(5)):
         )
     )
 
-    registros = [
+    return [
         mod_briefing.registro_de(produto, combinacao, pacote, dia, "0")
         for produto, combinacao, pacote in zip(produtos, combinacoes, pacotes)
     ]
 
+
+ERROS_DE_GERACAO = (ValueError, EspacoCombinatorioEsgotado, mod_blocos.ErroBlocos, ErroCatalogo)
+
+
+@app.post("/briefing")
+async def gerar_briefing(request: Request, qtd: int = Form(5)):
+    catalogo = catalogo_de(request)
+    dia = date.today().isoformat()
+
+    if any(v.data == dia for v in catalogo.videos()):
+        return RedirectResponse(
+            "/?erro=Ja+existe+briefing+para+hoje.+Use+refazer+para+sortear+de+novo.",
+            status_code=303,
+        )
+
     try:
+        matriz, _ = matriz_de(catalogo)
+        produtos = mod_briefing.selecionar_produtos(
+            catalogo.produtos_ativos(), catalogo.contagem_por_sku(), max(1, min(qtd, 20))
+        )
+        registros = await _redigir(catalogo, matriz, produtos, dia)
         catalogo.registrar(registros)
+    except ERROS_DE_GERACAO as exc:
+        return RedirectResponse(f"/?erro={exc}", status_code=303)
+
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/briefing/refazer")
+async def refazer_briefing(request: Request):
+    """Descarta os briefados de hoje e sorteia outros no lugar.
+
+    So mexe em `briefado`: se um video ja foi marcado como gerado, o clipe
+    correspondente esta baixado em `entrada/` com aquele nome de arquivo, e
+    apagar a linha deixaria o arquivo orfao para a montagem.
+    """
+    catalogo = catalogo_de(request)
+    dia = date.today().isoformat()
+
+    try:
+        descartaveis = [
+            v for v in catalogo.videos() if v.data == dia and v.status == "briefado"
+        ]
+        if not descartaveis:
+            return RedirectResponse(
+                "/?erro=Nao+ha+briefado+de+hoje+para+refazer.", status_code=303
+            )
+
+        # Guardado antes de apagar: e o que garante combinacao diferente agora.
+        descartados = [v.combinacao_hash for v in descartaveis]
+        catalogo.remover_videos([v.id for v in descartaveis])
+
+        matriz, _ = matriz_de(catalogo)
+        produtos = mod_briefing.selecionar_produtos(
+            catalogo.produtos_ativos(), catalogo.contagem_por_sku(), len(descartaveis)
+        )
+        registros = await _redigir(catalogo, matriz, produtos, dia, excluir=descartados)
+        catalogo.registrar(registros)
+    except ERROS_DE_GERACAO as exc:
+        return RedirectResponse(f"/?erro={exc}", status_code=303)
+
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/briefing/produto")
+async def gerar_para_produto(request: Request, sku: str = Form(...)):
+    """Um video sob demanda para um SKU escolhido, somado ao dia de hoje."""
+    catalogo = catalogo_de(request)
+    dia = date.today().isoformat()
+
+    try:
+        produto = catalogo.buscar_produto(sku.strip())
+        if produto is None:
+            return RedirectResponse(f"/?erro=SKU+nao+encontrado:+{sku}", status_code=303)
+        if produto.status != "ativo":
+            return RedirectResponse(
+                f"/?erro={produto.sku}+esta+{produto.status};+ative+antes+de+gerar",
+                status_code=303,
+            )
+
+        matriz, _ = matriz_de(catalogo)
+        registros = await _redigir(catalogo, matriz, [produto], dia)
+        catalogo.registrar(registros)
+    except ERROS_DE_GERACAO as exc:
+        return RedirectResponse(f"/?erro={exc}", status_code=303)
+
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/briefing/descartar")
+def descartar_video(request: Request, video_id: str = Form(...)):
+    """Apaga um video do log. Depois disso ele nao existiu: sai da janela."""
+    catalogo = catalogo_de(request)
+
+    try:
+        registro = catalogo.buscar(video_id)
+        if registro.status != "briefado":
+            return RedirectResponse(
+                f"/?erro=Video+{video_id}+esta+{registro.status};+so+briefado+pode+ser+descartado",
+                status_code=303,
+            )
+        catalogo.remover_videos([video_id])
     except ErroCatalogo as exc:
         return RedirectResponse(f"/?erro={exc}", status_code=303)
 
@@ -641,6 +746,7 @@ def ver_blocos(request: Request):
     return _pagina(
         request, "blocos.html", matriz=matriz, eixos=EIXOS,
         do_painel=do_painel, aviso_parametros=aviso,
+        descricao_eixo=DESCRICAO_EIXO,
     )
 
 
@@ -661,6 +767,7 @@ def ver_parametros(request: Request):
         parametros=parametros,
         aviso_parametros=aviso,
         eixos=EIXOS,
+        descricao_eixo=DESCRICAO_EIXO,
         # Um valor existente por eixo, para o formulario mostrar o estilo de
         # descritor em ingles que funciona — copiar um modelo e mais facil que
         # adivinhar o que o Veo entende.
@@ -679,6 +786,7 @@ def criar_parametro(
     eixo: str = Form(""),
     texto: str = Form(...),
     en: str = Form(""),
+    descricao: str = Form(""),
     categorias: list[str] = Form(default=[]),
 ):
     catalogo = catalogo_de(request)
@@ -712,6 +820,7 @@ def criar_parametro(
                 chave=chave,
                 texto=texto,
                 en=en.strip(),
+                descricao=descricao.strip(),
                 # Sem categoria marcada o valor serve todo produto, igual ao YAML.
                 categorias=tuple(c.strip().lower() for c in categorias if c.strip()),
             )

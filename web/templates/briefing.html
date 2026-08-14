@@ -17,6 +17,29 @@
   {% endif %}
 </div>
 
+{% if dia == hoje %}
+{% set descartaveis = videos|selectattr('status', 'equalto', 'briefado')|list %}
+<div class="acoes-dia">
+  <form method="post" action="/briefing/produto" class="gerar">
+    <label for="sku">gerar um vídeo avulso para</label>
+    <select id="sku" name="sku" required>
+      <option value="" selected disabled>escolha o produto…</option>
+      {% for produto in ativos %}
+      <option value="{{ produto.sku }}">{{ produto.sku }} — {{ produto.nome }}</option>
+      {% endfor %}
+    </select>
+    <button data-aguardando="gerando…">Gerar</button>
+  </form>
+
+  {% if descartaveis %}
+  <form method="post" action="/briefing/refazer" class="gerar"
+        data-confirmar="Refazer descarta {{ descartaveis|length }} vídeo(s) ainda em briefado e sorteia outros no lugar. Os descartados somem do histórico. Continuar?">
+    <button data-aguardando="refazendo…">Refazer os {{ descartaveis|length }} de hoje</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
 <nav class="dias" aria-label="Navegar por dia">
   <a href="/?data={{ dia_anterior }}" rel="prev" aria-label="Dia anterior">
     ‹<span class="rotulo-dia"> dia anterior</span>
@@ -56,6 +79,13 @@
     <span class="etiqueta">{{ video.sku }}</span>
     <span class="etiqueta status-{{ video.status }}">{{ video.status }}</span>
     <span class="etiqueta hash">{{ video.combinacao_hash }}</span>
+    {% if video.status == 'briefado' and dia == hoje %}
+    <form method="post" action="/briefing/descartar" class="descartar"
+          data-confirmar="Descartar este vídeo? Ele sai do histórico, então a combinação volta a poder ser sorteada.">
+      <input type="hidden" name="video_id" value="{{ video.id }}">
+      <button data-aguardando="…">descartar</button>
+    </form>
+    {% endif %}
   </header>
 
   <ul class="meta">

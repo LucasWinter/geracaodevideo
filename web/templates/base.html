@@ -70,6 +70,14 @@
     // tela. Sem retorno visivel a pessoa clica de novo achando que falhou.
     document.addEventListener('submit', (evento) => {
       const formulario = evento.target;
+
+      // Apagar registro de video nao tem desfazer: confirma antes de enviar.
+      const aviso = formulario.dataset.confirmar;
+      if (aviso && !confirm(aviso)) {
+        evento.preventDefault();
+        return;
+      }
+
       const botao = formulario.querySelector('button:not([type=button])');
       if (!botao || botao.disabled) return;
       botao.dataset.rotulo = botao.textContent;

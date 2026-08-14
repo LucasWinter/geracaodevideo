@@ -105,6 +105,30 @@ janela anti-repetição de um não enxerga o que o outro gerou.
 Três telas: **Briefing** (gerar o dia e copiar os prompts), **Catálogo** (cadastrar produtos) e
 **Matriz** (ver os blocos, só leitura).
 
+### Refazer o dia e gerar avulso
+
+Três ações na aba Briefing, todas restritas ao dia de hoje:
+
+- **Refazer os N de hoje** — descarta os vídeos ainda em `briefado` e sorteia outros no lugar.
+- **Descartar** (em cada cartão) — tira um vídeo só, quando apenas ele ficou ruim.
+- **Gerar um vídeo avulso para \<SKU\>** — um vídeo sob demanda para o produto escolhido, somado ao
+  dia. Sorteia da matriz normalmente, respeitando a categoria do produto e a anti-repetição.
+
+Duas regras que o código garante, e que valem entender:
+
+**Descartar significa "não foi gerado".** A linha some do log, e com ela o hash sai da janela de
+anti-repetição — a combinação volta a poder ser sorteada no futuro. É o oposto de marcar como
+cancelado, e é o que impede que tentativas descartadas envenenem a janela para sempre.
+
+**Mas o refazer imediato não repete o que você acabou de descartar.** Os hashes descartados são
+guardados em memória e somados à janela só naquela rodada (`_redigir(..., excluir=...)`). Sem isso,
+como as linhas já foram apagadas, o sorteio poderia devolver exatamente as mesmas combinações — o que
+é justamente o que você não quer ao clicar em refazer.
+
+**Vídeo fora de `briefado` é preservado.** Se você já baixou o clipe do Flow e rodou
+`gdv status <id> gerado`, o arquivo em `entrada/` tem aquele nome; apagar a linha o deixaria órfão
+para a montagem. Refazer pula esses, e o descarte individual os recusa.
+
 ### Senha
 
 Duas telas, para dois casos diferentes:
@@ -183,8 +207,13 @@ em silêncio, e você só percebe quando os vídeos começam a parecer iguais.
 - **Categoria** — as categorias citadas em `data/blocos.yaml` mais as que já existem no catálogo.
   A opção `outra…` libera um campo de texto: dá para cadastrar um produto de categoria nova na hora,
   mas ela só passa a puxar blocos restritos depois de ser citada no `blocos.yaml`.
-- **Ângulos** — caixas de seleção com a lista de `ANGULOS_SUGERIDOS` (`src/gdv/modelos.py`), mais um
-  campo livre para o que estiver fora dela. A lista não valida nada; é só a sugestão do formulário.
+- **Ângulos** — caixas de seleção vindas de `ANGULOS_DETALHADOS` (`src/gdv/modelos.py`), mais um campo
+  livre para o que estiver fora dela. A lista não valida nada; é só a sugestão do formulário.
+
+  Cada ângulo carrega rótulo e explicação, não só o id: "frontal" sozinho não diz a quem fotografa o
+  que precisa estar no quadro nem por que aquele ângulo importa. O mesmo vale para os seis eixos, que
+  têm nome e descrição em `DESCRICAO_EIXO` e aparecem assim na Matriz e em Parâmetros. Valor criado
+  pelo painel tem um campo `descrição` próprio, para nascer tão explicado quanto os de fábrica.
 - **Status** e **quantidade de vídeos** — listas fechadas.
 
 ### Rodar local

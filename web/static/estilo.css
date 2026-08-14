@@ -335,7 +335,19 @@ details pre { white-space: pre-wrap; word-break: break-all; font-size: .8rem; }
 /* ------------------------------------------------------------------ mobile */
 
 @media (max-width: 640px) {
-  :root { --toque: 2.75rem; }  /* 44px: minimo confortavel para o dedo */
+  :root {
+    --toque: 2.75rem;        /* 44px: minimo confortavel para o dedo */
+    --topo-altura: 6.25rem;  /* duas linhas: identidade em cima, abas embaixo */
+  }
+
+  /* Com quatro abas mais "senha" e "sair", 390px cortava as palavras no meio
+     ("efing", "Parâ") — pior que truncar, porque parece defeito. As abas descem
+     para uma linha inteira, onde cabem sem cortar. */
+  .topo { flex-wrap: wrap; }
+  .topo nav { order: 3; width: 100%; padding-bottom: .15rem; }
+  /* As quatro somam 375px de conteudo em 366px uteis: apertar o respiro lateral
+     devolve os 9px que faltam e todas cabem sem rolar. */
+  .topo nav a { padding: .3rem .55rem; }
 
   main { padding: 1rem max(.75rem, env(safe-area-inset-left)) 3rem; }
   h1 { font-size: 1.3rem; }
@@ -411,3 +423,75 @@ details pre { white-space: pre-wrap; word-break: break-all; font-size: .8rem; }
 
 /* Botao de remover dentro da tabela nao pode esticar a linha. */
 .tabela-cartoes td form { margin: 0; }
+
+/* ------------------------------------------- valores explicados e acoes do dia */
+
+/* Lista de valores da matriz e de parametros. Substitui a tabela de id/texto:
+   tres colunas de palavras soltas nao diziam o que cada valor faz com o video. */
+.valores { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.valores > li {
+  border: 1px solid var(--borda); border-radius: var(--raio);
+  padding: .7rem .85rem; background: var(--superficie-2);
+}
+.valor-topo {
+  display: flex; align-items: center; gap: .4rem;
+  flex-wrap: wrap; margin-bottom: .3rem;
+}
+.valor-topo strong { font-size: .98rem; margin-right: .2rem; }
+.valor-topo .descartar { margin-left: auto; }
+
+/* O descritor em ingles e o que realmente vai para o prompt do Veo. */
+.descritor {
+  margin: .2rem 0; color: var(--discreto);
+  font: .84rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.miudo { font-size: .76rem; margin: .2rem 0 0; }
+
+/* Caixa de selecao com explicacao embaixo do rotulo. */
+.grade-descritos {
+  display: grid; gap: .4rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+.caixa-descrita {
+  display: flex !important; align-items: flex-start; gap: .6rem;
+  padding: .55rem .6rem; border: 1px solid var(--borda); border-radius: var(--raio);
+  background: var(--superficie); cursor: pointer; color: var(--texto);
+}
+.caixa-descrita:hover { border-color: var(--destaque); }
+.caixa-descrita:has(input:checked) {
+  border-color: var(--destaque);
+  background: color-mix(in srgb, var(--destaque) 10%, var(--superficie));
+}
+.caixa-descrita input {
+  width: 1.15rem; height: 1.15rem; min-height: 0; margin-top: .15rem;
+  flex: 0 0 auto; accent-color: var(--destaque);
+}
+.caixa-descrita .corpo { display: grid; gap: .15rem; min-width: 0; }
+.caixa-descrita strong { font-size: .9rem; font-weight: 600; }
+.caixa-descrita small { color: var(--discreto); font-size: .78rem; line-height: 1.4; }
+
+/* Faixa de acoes do dia: gerar avulso e refazer. */
+.acoes-dia {
+  display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;
+  margin-bottom: 1.25rem; padding: .75rem;
+  border: 1px solid var(--borda); border-radius: var(--raio);
+  background: var(--superficie);
+}
+.acoes-dia .gerar { margin: 0; }
+.acoes-dia select { max-width: 100%; }
+.descartar { margin: 0; }
+.descartar button { color: var(--discreto); }
+.descartar button:hover { color: var(--erro); border-color: var(--erro); }
+
+@media (max-width: 640px) {
+  .grade-descritos { grid-template-columns: 1fr; }
+  .acoes-dia { flex-direction: column; align-items: stretch; }
+  .acoes-dia .gerar { flex-direction: column; align-items: stretch; }
+  .acoes-dia .gerar select, .acoes-dia .gerar button { width: 100%; }
+}
+
+/* iPhone SE e afins: as quatro abas so cabem com a fonte um pouco menor. Sem
+   isto sobra meia palavra na borda, que parece defeito e nao truncamento. */
+@media (max-width: 380px) {
+  .topo nav a { font-size: .92rem; padding: .3rem .5rem; }
+}

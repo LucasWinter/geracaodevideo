@@ -13,39 +13,55 @@
 </p>
 
 <nav class="atalhos" aria-label="Ir para um eixo">
-  {% for eixo in eixos %}<a href="#eixo-{{ eixo }}">{{ eixo }}</a>{% endfor %}
+  {% for eixo in eixos %}
+  <a href="#eixo-{{ eixo }}">{{ descricao_eixo[eixo][0] if eixo in descricao_eixo else eixo }}</a>
+  {% endfor %}
 </nav>
 
 {% for eixo in eixos %}
+{% set titulo, explicacao = descricao_eixo.get(eixo, (eixo, '')) %}
 <article class="card" id="eixo-{{ eixo }}">
-  <header><h2>{{ eixo }}</h2><span class="etiqueta">{{ matriz.eixos[eixo]|length }} valores</span></header>
-  <div class="tabela-rolagem">
-    <table class="tabela-cartoes">
-      <thead><tr><th>id</th><th>texto</th><th>categorias</th></tr></thead>
-      <tbody>
-        {% for valor in matriz.eixos[eixo] %}
-        <tr>
-          <td data-rotulo="id">
-            <code>{{ valor.id }}</code>
-            {% if (eixo, valor.id) in do_painel %}
-            <span class="etiqueta">painel</span>
-            {% endif %}
-          </td>
-          <td data-rotulo="texto" class="livre">{{ valor.texto }}</td>
-          <td data-rotulo="categorias">{{ valor.categorias|join(', ') if valor.categorias else 'todas' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <header>
+    <h2>{{ titulo }}</h2>
+    <span class="etiqueta"><code>{{ eixo }}</code></span>
+    <span class="etiqueta">{{ matriz.eixos[eixo]|length }} valores</span>
+  </header>
+
+  {% if explicacao %}<p class="nota">{{ explicacao }}</p>{% endif %}
+
+  <ul class="valores">
+    {% for valor in matriz.eixos[eixo] %}
+    <li>
+      <div class="valor-topo">
+        <strong>{{ valor.texto }}</strong>
+        {% if (eixo, valor.id) in do_painel %}<span class="etiqueta">painel</span>{% endif %}
+        {% if valor.categorias %}
+        <span class="etiqueta">só {{ valor.categorias|join(', ') }}</span>
+        {% else %}
+        <span class="etiqueta">todas as categorias</span>
+        {% endif %}
+      </div>
+      {# O `en` e o que realmente vai para o prompt do Veo — e a descricao mais
+         honesta do que este valor faz com o video. #}
+      <p class="descritor">{{ valor.en }}</p>
+      {% if valor.extras %}
+      <p class="discreto miudo">
+        {% for chave, conteudo in valor.extras.items() %}{{ chave }}: {{ conteudo }}{{ ' · ' if not loop.last }}{% endfor %}
+      </p>
+      {% endif %}
+      <p class="discreto miudo">id <code>{{ valor.id }}</code> — entra no hash, nunca renomeie</p>
+    </li>
+    {% endfor %}
+  </ul>
 </article>
 {% endfor %}
 
 <article class="card">
   <header><h2>Termos proibidos</h2></header>
-  <p class="discreto">
+  <p class="nota">
     Filtro determinístico sobre tudo que o redator produz. Se o Gemini escorregar
-    num claim de eficácia, a saída é descartada e o template assume.
+    num claim de eficácia, a saída é descartada e o template assume. Instrução de
+    prompt não é controle — esta lista é.
   </p>
   <p>{% for termo in matriz.termos_proibidos %}<span class="etiqueta">{{ termo }}</span> {% endfor %}</p>
 </article>

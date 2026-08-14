@@ -106,12 +106,15 @@
         Marque o que existe na pasta. O redator usa para montar a cena — marcar
         <code>em-uso</code> faz ele pedir o produto sendo usado, não parado na mesa.
       </p>
-      <div class="grade-caixas">
+      <div class="grade-descritos">
         {% for angulo in angulos_sugeridos %}
-        <label class="caixa">
-          <input type="checkbox" name="angulos" value="{{ angulo }}"
-                 {% if angulo in angulos_marcados %}checked{% endif %}>
-          <span>{{ angulo }}</span>
+        <label class="caixa-descrita">
+          <input type="checkbox" name="angulos" value="{{ angulo.id }}"
+                 {% if angulo.id in angulos_marcados %}checked{% endif %}>
+          <span class="corpo">
+            <strong>{{ angulo.rotulo }}</strong>
+            {% if angulo.descricao %}<small>{{ angulo.descricao }}</small>{% endif %}
+          </span>
         </label>
         {% endfor %}
       </div>

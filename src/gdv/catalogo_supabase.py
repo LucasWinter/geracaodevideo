@@ -143,6 +143,7 @@ class CatalogoSupabase:
                     "chave": parametro.chave,
                     "texto": parametro.texto,
                     "en": parametro.en,
+                    "descricao": parametro.descricao,
                     "categorias": list(parametro.categorias),
                     "extras": parametro.extras,
                 },
@@ -169,6 +170,7 @@ class CatalogoSupabase:
             chave=linha["chave"],
             texto=linha["texto"],
             en=linha.get("en") or "",
+            descricao=linha.get("descricao") or "",
             categorias=tuple(linha.get("categorias") or []),
             extras=dict(linha.get("extras") or {}),
         )
@@ -239,6 +241,19 @@ class CatalogoSupabase:
                 ]
             )
             .execute()
+        )
+
+    def remover_videos(self, ids: list[str]) -> None:
+        """Apaga registros de video. Nao existe no backend CSV — o site e quem usa.
+
+        Apagar e a forma de dizer "este video nao foi gerado": a linha some, e
+        com ela o hash sai da janela de anti-repeticao. E o que permite refazer
+        o dia sem que a tentativa descartada bloqueie combinacoes para sempre.
+        """
+        if not ids:
+            return
+        self._executar(
+            lambda: self.cliente.table(TABELA_VIDEOS).delete().in_("id", ids).execute()
         )
 
     def marcar_status(self, video_id: str, novo_status: str) -> RegistroVideo:

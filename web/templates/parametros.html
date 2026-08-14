@@ -33,9 +33,12 @@
         Em qual eixo
         <select id="eixo" name="eixo">
           {% for nome in eixos %}
-          <option value="{{ nome }}">{{ nome }}</option>
+          <option value="{{ nome }}" data-explicacao="{{ descricao_eixo[nome][1] if nome in descricao_eixo }}">
+            {{ descricao_eixo[nome][0] if nome in descricao_eixo else nome }}
+          </option>
           {% endfor %}
         </select>
+        <small id="explicacao-eixo"></small>
       </label>
     </div>
 
@@ -43,6 +46,16 @@
       Texto em português
       <input name="texto" required placeholder="varanda ao entardecer">
       <small id="dica-texto">Aparece no briefing e vira o id do valor.</small>
+    </label>
+
+    <label>
+      Descrição para quem lê o painel
+      <input name="descricao"
+             placeholder="Fim de tarde na varanda, luz baixa e cidade desfocada ao fundo.">
+      <small>
+        Não entra no prompt nem no sorteio. É o que faz o valor novo nascer tão
+        explicado quanto os de fábrica, para quem abrir a tela depois de você.
+      </small>
     </label>
 
     <div id="campos-en">
@@ -97,33 +110,31 @@
     veja em <a href="/blocos">Matriz</a>.
   </p>
   {% else %}
-  <div class="tabela-rolagem">
-    <table class="tabela-cartoes">
-      <thead>
-        <tr><th>tipo</th><th>texto</th><th>id</th><th>categorias</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for p in parametros %}
-        <tr>
-          <td data-rotulo="Tipo">
-            {% if p.tipo == 'eixo' %}<code>{{ p.eixo }}</code>{% else %}{{ p.tipo }}{% endif %}
-          </td>
-          <td data-rotulo="Texto" class="livre">{{ p.texto }}</td>
-          <td data-rotulo="id"><code>{{ p.chave }}</code></td>
-          <td data-rotulo="Categorias">{{ p.categorias|join(', ') if p.categorias else 'todas' }}</td>
-          <td data-rotulo="">
-            <form method="post" action="/parametros/remover">
-              <input type="hidden" name="tipo" value="{{ p.tipo }}">
-              <input type="hidden" name="eixo" value="{{ p.eixo }}">
-              <input type="hidden" name="chave" value="{{ p.chave }}">
-              <button data-aguardando="removendo…">remover</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <ul class="valores">
+    {% for p in parametros %}
+    <li>
+      <div class="valor-topo">
+        <strong>{{ p.texto }}</strong>
+        {% if p.tipo == 'eixo' %}
+        <span class="etiqueta">{{ descricao_eixo[p.eixo][0] if p.eixo in descricao_eixo else p.eixo }}</span>
+        {% else %}
+        <span class="etiqueta">{{ p.tipo }}</span>
+        {% endif %}
+        {% if p.categorias %}<span class="etiqueta">só {{ p.categorias|join(', ') }}</span>{% endif %}
+        <form method="post" action="/parametros/remover" class="descartar"
+              data-confirmar="Remover &quot;{{ p.texto }}&quot;? Ele para de ser sorteado a partir de agora; vídeos já gerados com ele continuam válidos.">
+          <input type="hidden" name="tipo" value="{{ p.tipo }}">
+          <input type="hidden" name="eixo" value="{{ p.eixo }}">
+          <input type="hidden" name="chave" value="{{ p.chave }}">
+          <button data-aguardando="removendo…">remover</button>
+        </form>
+      </div>
+      {% if p.descricao %}<p class="nota">{{ p.descricao }}</p>{% endif %}
+      {% if p.en %}<p class="descritor">{{ p.en }}</p>{% endif %}
+      <p class="discreto miudo">id <code>{{ p.chave }}</code></p>
+    </li>
+    {% endfor %}
+  </ul>
   <p class="rodape">
     Remover só tira o valor dos sorteios daqui para a frente. Vídeo já gerado com
     ele continua válido — o hash guardado no log é texto, não referência. O que
@@ -159,7 +170,19 @@
     dica.textContent = DICAS[tipo.value];
   }
 
+  // O nome tecnico do eixo nao diz o que ele muda no video; a explicacao
+  // aparece embaixo do seletor conforme se escolhe.
+  const eixo = document.getElementById('eixo');
+  const explicacao = document.getElementById('explicacao-eixo');
+
+  function explicarEixo() {
+    explicacao.textContent = eixo.selectedOptions[0].dataset.explicacao || '';
+  }
+
+  eixo.addEventListener('change', explicarEixo);
+
   tipo.addEventListener('change', sincronizar);
   sincronizar();
+  explicarEixo();
 </script>
 {% endblock %}

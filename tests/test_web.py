@@ -525,7 +525,9 @@ def test_valor_criado_aparece_marcado_na_matriz(logado):
 
     html = " ".join(logado.get("/blocos").text.split())
 
-    assert '<code>drone_baixo</code> <span class="etiqueta">painel</span>' in html
+    assert "drone baixo" in html
+    assert '<code>drone_baixo</code>' in html
+    assert '<span class="etiqueta">painel</span>' in html
 
 
 def test_valor_de_eixo_exige_ingles(logado, catalogo_web):
@@ -846,3 +848,191 @@ def test_saude_nunca_quebra_por_causa_da_checagem_de_tabela(deslogado, monkeypat
 
     assert resposta.status_code == 200
     assert "sem rede" in resposta.json()["tabelas"]["_"]
+
+
+# --------------------------------------------------- refazer e gerar avulso
+
+def test_refazer_troca_as_combinacoes_do_dia(logado, catalogo_web):
+    """O ponto do refazer: sair com prompts diferentes dos descartados."""
+    logado.post("/briefing", data={"qtd": 2})
+    antes = {v.combinacao_hash for v in catalogo_web.videos()}
+
+    resposta = logado.post("/briefing/refazer", follow_redirects=False)
+
+    assert resposta.status_code == 303
+    depois = {v.combinacao_hash for v in catalogo_web.videos()}
+    assert len(depois) == 2
+    assert not (antes & depois)
+
+
+def test_refazer_apaga_os_antigos_em_vez_de_somar(logado, catalogo_web):
+    logado.post("/briefing", data={"qtd": 3})
+
+    logado.post("/briefing/refazer")
+
+    assert len(catalogo_web.videos()) == 3
+
+
+def test_descartado_sai_da_janela_de_anti_repeticao(logado, catalogo_web):
+    """"Uma vez deletado, esses prompts nao foram gerados."
+
+    Depois do refazer, o hash descartado nao pode continuar bloqueando: ele
+    sumiu do log, entao so a rodada seguinte pode sorteá-lo de novo.
+    """
+    logado.post("/briefing", data={"qtd": 1})
+    descartado = catalogo_web.videos()[0].combinacao_hash
+
+    logado.post("/briefing/refazer")
+
+    assert descartado not in catalogo_web.hashes_recentes(30)
+
+
+def test_refazer_preserva_video_que_saiu_do_briefado(logado, catalogo_web):
+    """Clipe ja baixado tem nome de arquivo; apagar a linha o deixaria orfao."""
+    logado.post("/briefing", data={"qtd": 2})
+    protegido = catalogo_web.videos()[0]
+    catalogo_web.marcar_status(protegido.id, "gerado")
+
+    logado.post("/briefing/refazer")
+
+    ids = {v.id for v in catalogo_web.videos()}
+    assert protegido.id in ids
+    assert len(ids) == 2  # o gerado ficou, o outro briefado foi trocado
+
+
+def test_refazer_sem_briefado_avisa(logado, catalogo_web):
+    resposta = logado.post("/briefing/refazer", follow_redirects=False)
+
+    assert "erro=" in resposta.headers["location"]
+    assert catalogo_web.videos() == []
+
+
+def test_gerar_para_um_sku(logado, catalogo_web):
+    resposta = logado.post(
+        "/briefing/produto", data={"sku": "CAS-014"}, follow_redirects=False
+    )
+
+    assert resposta.status_code == 303
+    videos = catalogo_web.videos()
+    assert len(videos) == 1
+    assert videos[0].sku == "CAS-014"
+    assert videos[0].prompt
+
+
+def test_gerar_avulso_soma_ao_dia_em_vez_de_substituir(logado, catalogo_web):
+    logado.post("/briefing", data={"qtd": 2})
+
+    logado.post("/briefing/produto", data={"sku": "BLS-001"})
+
+    assert len(catalogo_web.videos()) == 3
+
+
+def test_gerar_avulso_respeita_a_anti_repeticao(logado, catalogo_web):
+    logado.post("/briefing/produto", data={"sku": "BLS-001"})
+    logado.post("/briefing/produto", data={"sku": "BLS-001"})
+
+    hashes = [v.combinacao_hash for v in catalogo_web.videos()]
+    assert len(set(hashes)) == 2
+
+
+def test_gerar_avulso_recusa_sku_inexistente(logado, catalogo_web):
+    resposta = logado.post(
+        "/briefing/produto", data={"sku": "NAO-EXISTE"}, follow_redirects=False
+    )
+
+    assert "nao+encontrado" in resposta.headers["location"].replace("%20", "+")
+    assert catalogo_web.videos() == []
+
+
+def test_gerar_avulso_recusa_produto_pausado(logado, catalogo_web):
+    produto = catalogo_web.buscar_produto("BLS-001")
+    catalogo_web.salvar_produto(
+        Produto(produto.sku, produto.nome, produto.categoria, produto.preco,
+                produto.margem, "", "", [], "pausado")
+    )
+
+    resposta = logado.post(
+        "/briefing/produto", data={"sku": "BLS-001"}, follow_redirects=False
+    )
+
+    assert "erro=" in resposta.headers["location"]
+    assert catalogo_web.videos() == []
+
+
+def test_descartar_um_video(logado, catalogo_web):
+    logado.post("/briefing", data={"qtd": 3})
+    alvo = catalogo_web.videos()[1]
+
+    logado.post("/briefing/descartar", data={"video_id": alvo.id}, follow_redirects=False)
+
+    restantes = {v.id for v in catalogo_web.videos()}
+    assert alvo.id not in restantes
+    assert len(restantes) == 2
+
+
+def test_descartar_recusa_video_ja_gerado(logado, catalogo_web):
+    logado.post("/briefing", data={"qtd": 1})
+    alvo = catalogo_web.videos()[0]
+    catalogo_web.marcar_status(alvo.id, "gerado")
+
+    resposta = logado.post(
+        "/briefing/descartar", data={"video_id": alvo.id}, follow_redirects=False
+    )
+
+    assert "erro=" in resposta.headers["location"]
+    assert len(catalogo_web.videos()) == 1
+
+
+def test_seletor_de_sku_lista_so_os_ativos(logado, catalogo_web):
+    produto = catalogo_web.buscar_produto("CAS-014")
+    catalogo_web.salvar_produto(
+        Produto(produto.sku, produto.nome, produto.categoria, produto.preco,
+                produto.margem, "", "", [], "esgotado")
+    )
+
+    html = logado.get("/").text
+
+    assert 'value="BLS-001"' in html
+    assert 'value="CAS-014"' not in html
+
+
+# ---------------------------------------------- parametros mais descritivos
+
+def test_angulos_vem_com_rotulo_e_explicacao(logado):
+    """"frontal" sozinho nao diz a quem fotografa o que precisa estar no quadro."""
+    html = logado.get("/produto/novo").text
+
+    assert "Close no fecho" in html
+    assert "Zíper, botão ou trava" in html
+    assert "Escala com a mão" in html
+
+
+def test_matriz_mostra_o_que_cada_eixo_controla(logado):
+    html = logado.get("/blocos").text
+
+    assert "Movimento de câmera" in html
+    assert "Iluminação" in html
+    # O descritor em ingles e o que vai para o prompt: precisa estar visivel.
+    assert "first-person POV" in html
+
+
+def test_valor_criado_no_painel_guarda_a_descricao(logado, catalogo_web):
+    logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "cenario", "texto": "varanda",
+              "en": "balcony at dusk", "descricao": "Fim de tarde, cidade desfocada."},
+    )
+
+    assert catalogo_web.parametros()[0].descricao == "Fim de tarde, cidade desfocada."
+    assert "Fim de tarde, cidade desfocada." in logado.get("/parametros").text
+
+
+def test_angulo_criado_no_painel_mostra_a_descricao_no_produto(logado):
+    logado.post(
+        "/parametros",
+        data={"tipo": "angulo", "texto": "dobrado", "descricao": "O produto fechado, ocupando pouco espaço."},
+    )
+
+    html = logado.get("/produto/novo").text
+
+    assert "O produto fechado, ocupando pouco espaço." in html

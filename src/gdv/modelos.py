@@ -16,18 +16,77 @@ STATUS_VIDEO = ("briefado", "gerado", "montado", "postado")
 # EIXOS e STATUS_*, esta lista nao valida nada: e so a sugestao que o formulario
 # oferece como caixas de selecao. Produto com angulo fora dela continua valido —
 # o campo livre do formulario existe justamente para isso.
-ANGULOS_SUGERIDOS = (
-    "frontal",
-    "lateral",
-    "traseira",
-    "superior",
-    "detalhe-textura",
-    "detalhe-fecho",
-    "em-uso",
-    "escala-mao",
-    "interior",
-    "embalagem",
+#
+# Cada um vem com rotulo e explicacao porque "frontal" sozinho nao diz a quem
+# fotografa o que precisa estar no quadro, nem por que aquele angulo importa.
+ANGULOS_DETALHADOS: tuple[tuple[str, str, str], ...] = (
+    ("frontal", "Frontal",
+     "O produto de frente, inteiro e centralizado. É a referência de formato e "
+     "proporção — sem ela o frame inicial erra o desenho do produto."),
+    ("lateral", "Lateral",
+     "De perfil, mostrando profundidade e espessura. Importa em bolsa, caixa e "
+     "tudo que parece mais fino de frente do que é."),
+    ("traseira", "Traseira",
+     "As costas do produto. Vale quando há alça, etiqueta ou acabamento que só "
+     "aparece por trás."),
+    ("superior", "De cima (flat lay)",
+     "Visto de cima, apoiado. É o enquadramento que combina com cenário de mesa "
+     "e o mais fácil de reproduzir em casa."),
+    ("detalhe-textura", "Close na textura",
+     "Trama, verniz, granulado. É o que comunica qualidade numa tela de celular, "
+     "onde o produto inteiro fica pequeno demais para julgar."),
+    ("detalhe-fecho", "Close no fecho",
+     "Zíper, botão ou trava — de preferência sendo operado. Movimento no close "
+     "prova que funciona, foto parada não."),
+    ("em-uso", "Em uso",
+     "Alguém usando de verdade, rosto fora do quadro. Dá contexto e escala ao "
+     "mesmo tempo, e é o que mais aproxima do formato nativo do TikTok."),
+    ("escala-mao", "Escala com a mão",
+     "A mão ao lado do produto para dar noção de tamanho. Resolve a dúvida que "
+     "mais aparece nos comentários."),
+    ("interior", "Interior",
+     "Por dentro: compartimentos, forro, capacidade. Decisivo em bolsa, "
+     "necessaire e organizador."),
+    ("embalagem", "Embalagem",
+     "Como o produto chega ao cliente. É o insumo do unboxing."),
 )
+
+ANGULOS_SUGERIDOS = tuple(id_ for id_, _, _ in ANGULOS_DETALHADOS)
+
+# O que cada eixo da matriz controla. Serve as telas de Matriz e Parametros:
+# o nome tecnico do eixo nao diz a quem cadastra o que ele muda no video.
+DESCRICAO_EIXO: dict[str, tuple[str, str]] = {
+    "gancho_pov": (
+        "Gancho e ponto de vista",
+        "Como o vídeo abre e de que ângulo humano. É o que segura o dedo nos "
+        "dois primeiros segundos — o eixo que mais decide se alguém assiste.",
+    ),
+    "cenario": (
+        "Cenário",
+        "Onde a cena acontece: superfície, fundo e clima. Cenário errado para a "
+        "categoria destoa mais que qualquer outro erro.",
+    ),
+    "camera": (
+        "Movimento de câmera",
+        "Como a câmera se desloca. Define se o produto é revelado, contornado ou "
+        "acompanhado — e o quanto o vídeo parece feito à mão ou produzido.",
+    ),
+    "iluminacao": (
+        "Iluminação",
+        "A luz da cena. Muda a percepção de qualidade do produto mais que "
+        "qualquer outro eixo, com o mesmo produto e o mesmo cenário.",
+    ),
+    "detalhe_close": (
+        "Detalhe em close",
+        "O que ganha close no meio do vídeo. É o momento em que o produto prova "
+        "o acabamento, e o que separa vídeo de catálogo de vídeo que vende.",
+    ),
+    "ritmo": (
+        "Ritmo",
+        "Quantos clipes e de que duração. Define se o vídeo é um take contínuo "
+        "ou uma sequência cortada — e quantos clipes você precisa baixar do Flow.",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -63,6 +122,9 @@ class Parametro:
     texto: str
     eixo: str = ""  # so preenchido quando tipo == "eixo"
     en: str = ""
+    # Explicacao em portugues, so para quem le o painel. Nao entra no prompt nem
+    # no hash: existe para o valor novo nascer tao explicado quanto os de fabrica.
+    descricao: str = ""
     categorias: tuple[str, ...] = ()
     extras: dict[str, Any] = field(default_factory=dict)
 
