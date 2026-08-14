@@ -12,6 +12,22 @@ EIXOS = ("gancho_pov", "cenario", "camera", "iluminacao", "detalhe_close", "ritm
 STATUS_PRODUTO = ("ativo", "pausado", "esgotado")
 STATUS_VIDEO = ("briefado", "gerado", "montado", "postado")
 
+# Rotulo e explicacao de cada status, para o painel. O valor gravado continua
+# sendo a chave — quem le a tela nao precisa saber o que "briefado" quer dizer,
+# e "briefado" sozinho nao diz a ninguem em que ponto do fluxo o video esta.
+ROTULO_STATUS_PRODUTO: dict[str, tuple[str, str]] = {
+    "ativo": ("Ativo", "Entra no sorteio do briefing."),
+    "pausado": ("Pausado", "Fica no catálogo, mas não recebe vídeo novo."),
+    "esgotado": ("Sem estoque", "Não recebe vídeo novo enquanto não voltar ao ar."),
+}
+
+ROTULO_STATUS_VIDEO: dict[str, tuple[str, str]] = {
+    "briefado": ("A gerar", "O texto está pronto. Falta gerar o vídeo no Flow."),
+    "gerado": ("Gerado", "O clipe foi baixado. Falta montar com `gdv montar`."),
+    "montado": ("Montado", "O vídeo final está pronto para subir no TikTok."),
+    "postado": ("Postado", "Publicado no TikTok Shop."),
+}
+
 # Angulos de foto que o redator recebe como `angulos_disponiveis`. Diferente de
 # EIXOS e STATUS_*, esta lista nao valida nada: e so a sugestao que o formulario
 # oferece como caixas de selecao. Produto com angulo fora dela continua valido —

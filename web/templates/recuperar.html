@@ -2,6 +2,9 @@
 {% set mostrar_nav = false %}
 {% block titulo %}Recuperar senha{% endblock %}
 
+{# O erro aparece dentro do cartão, junto do formulário. #}
+{% block avisos %}{% endblock %}
+
 {% block conteudo %}
 <div class="login">
   <h1>gdv</h1>
@@ -10,7 +13,7 @@
   {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
   {% if enviado %}
-    <p class="aviso" role="status">
+    <p class="sucesso" role="status">
       Se esse e-mail estiver cadastrado, o link de redefinição já saiu. Confira a
       caixa de entrada e o spam.
     </p>

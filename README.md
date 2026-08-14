@@ -73,9 +73,10 @@ ffmpeg e por isso não roda em serverless.
 6. no terminal:  gdv status 1 postado
 ```
 
-O painel tem três telas: **Briefing** (cards do dia com botão de copiar prompt,
-gancho e legenda), **Catálogo** (cadastro de produtos) e **Matriz** (a matriz de
-blocos, só leitura).
+O painel tem quatro telas: **Briefing** (cards do dia com botão de copiar prompt,
+gancho, legenda e nome do arquivo), **Catálogo** (cadastro de produtos),
+**Parâmetros** (ampliar as opções do sorteio sem deploy) e **Matriz** (todas as
+opções em vigor, só leitura).
 
 Prefere terminal? `gdv briefing --qtd 5` faz o mesmo, contra o mesmo banco.
 
@@ -102,8 +103,8 @@ de reimplementar o sorteio em JavaScript. Isso não é preferência de linguagem
 `hash_combinacao()` precisa dar exatamente o mesmo valor nos dois lugares, senão a
 janela anti-repetição de um não enxerga o que o outro gerou.
 
-Três telas: **Briefing** (gerar o dia e copiar os prompts), **Catálogo** (cadastrar produtos) e
-**Matriz** (ver os blocos, só leitura).
+Quatro telas: **Briefing** (gerar o dia e copiar os prompts), **Catálogo** (cadastrar produtos),
+**Parâmetros** (acrescentar cenários, categorias e ângulos) e **Matriz** (ver os blocos, só leitura).
 
 ### Refazer o dia e gerar avulso
 
@@ -111,7 +112,7 @@ Três ações na aba Briefing, todas restritas ao dia de hoje:
 
 - **Refazer os N de hoje** — descarta os vídeos ainda em `briefado` e sorteia outros no lugar.
 - **Descartar** (em cada cartão) — tira um vídeo só, quando apenas ele ficou ruim.
-- **Gerar um vídeo avulso para \<SKU\>** — um vídeo sob demanda para o produto escolhido, somado ao
+- **Gerar vídeo extra** — um vídeo sob demanda para o produto escolhido, somado ao
   dia. Sorteia da matriz normalmente, respeitando a categoria do produto e a anti-repetição.
 
 Duas regras que o código garante, e que valem entender:

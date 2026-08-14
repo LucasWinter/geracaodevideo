@@ -37,7 +37,10 @@ def _config() -> tuple[str, str]:
     url = os.environ.get("SUPABASE_URL", "").strip()
     chave = os.environ.get("SUPABASE_ANON_KEY", "").strip()
     if not url or not chave:
-        raise ErroAutenticacao("SUPABASE_URL e SUPABASE_ANON_KEY nao estao configurados")
+        raise ErroAutenticacao(
+            "O painel ainda não foi configurado: faltam SUPABASE_URL e "
+            "SUPABASE_ANON_KEY. Quem administra o sistema precisa defini-las."
+        )
     return url, chave
 
 
@@ -53,11 +56,11 @@ def entrar(email: str, senha: str) -> Sessao:
     try:
         resposta = cliente.auth.sign_in_with_password({"email": email, "password": senha})
     except Exception as exc:
-        raise ErroAutenticacao("e-mail ou senha invalidos") from exc
+        raise ErroAutenticacao("E-mail ou senha incorretos. Confira e tente de novo.") from exc
 
     sessao = getattr(resposta, "session", None)
     if not sessao or not sessao.access_token:
-        raise ErroAutenticacao("e-mail ou senha invalidos")
+        raise ErroAutenticacao("E-mail ou senha incorretos. Confira e tente de novo.")
 
     return Sessao(
         access_token=sessao.access_token,
@@ -91,7 +94,8 @@ def redefinir_com_token(acesso: str, refresh: str, nova_senha: str) -> Sessao:
         resposta = cliente.auth.update_user({"password": nova_senha})
     except Exception as exc:
         raise ErroAutenticacao(
-            "link expirado ou ja usado — peca a recuperacao de novo"
+            "Este link de recuperação expirou ou já foi usado. Peça um novo "
+            "e-mail de recuperação."
         ) from exc
 
     usuario = getattr(resposta, "user", None)
@@ -110,7 +114,7 @@ def trocar_senha(acesso: str, refresh: str, nova_senha: str) -> None:
         cliente.auth.set_session(acesso, refresh or "")
         cliente.auth.update_user({"password": nova_senha})
     except Exception as exc:
-        raise ErroAutenticacao(f"nao foi possivel trocar a senha: {exc}") from exc
+        raise ErroAutenticacao(f"Não consegui trocar a senha: {exc}") from exc
 
 
 def gravar_cookies(resposta: Response, sessao: Sessao) -> None:

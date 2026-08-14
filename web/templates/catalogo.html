@@ -1,55 +1,71 @@
 {% extends "base.html" %}
-{% block titulo %}Catálogo{% endblock %}
+{% block titulo %}Catálogo de produtos{% endblock %}
 
 {% block conteudo %}
 <div class="cabecalho">
   <h1>Catálogo <span class="dia">{{ produtos|length }} produto{{ 's' if produtos|length != 1 }}</span></h1>
-  <a href="/produto/novo" class="primario botao">Novo produto</a>
+  <a href="/produto/novo" class="primario botao">+ Novo produto</a>
 </div>
 
 {% if not produtos %}
 <p class="vazio">
-  Nenhum produto cadastrado. Sem produto ativo o briefing não roda — e sem foto
-  limpa na pasta do Drive, o frame inicial não sai bom.
+  Nenhum produto cadastrado ainda. O briefing sorteia entre os produtos ativos,
+  então cadastre pelo menos um para começar — leva menos de um minuto e o que
+  mais importa é a pasta com fotos limpas do produto.
 </p>
 {% else %}
+<p class="nota">
+  Clique em qualquer produto para editar. Só os produtos <strong>ativos</strong>
+  entram no sorteio do briefing.
+</p>
+
 <div class="filtro">
-  <label for="busca" class="oculto-visual">Filtrar produtos</label>
-  <input id="busca" type="search" placeholder="filtrar por SKU, nome ou categoria"
+  <label for="busca" class="oculto-visual">Filtrar produtos por SKU, nome ou categoria</label>
+  <input id="busca" type="search" placeholder="🔎 Filtrar por SKU, nome ou categoria"
          autocomplete="off" hidden>
 </div>
 
 <div class="tabela-rolagem">
   <table class="tabela-cartoes" id="tabela-produtos">
+    <caption class="oculto-visual">
+      Produtos cadastrados, com preço, quantidade de vídeos já feitos e situação.
+    </caption>
     <thead>
       <tr>
         <th>SKU</th><th>Nome</th><th>Categoria</th>
         <th class="num">Preço</th><th class="num">Vídeos</th>
-        <th>Fotos</th><th>Status</th>
+        <th>Fotos</th><th>Situação</th>
       </tr>
     </thead>
     <tbody>
       {% for produto in produtos %}
+      {% set rotulo, explicacao = rotulo_status_produto.get(produto.status, (produto.status, '')) %}
       <tr>
-        <td data-rotulo="SKU"><a href="/produto/{{ produto.sku }}">{{ produto.sku }}</a></td>
-        <td data-rotulo="Nome"><a href="/produto/{{ produto.sku }}" class="nome">{{ produto.nome }}</a></td>
+        <td data-rotulo="SKU" class="cod"><a href="/produto/{{ produto.sku }}">{{ produto.sku }}</a></td>
+        <td data-rotulo="Nome" class="livre">
+          <a href="/produto/{{ produto.sku }}" class="nome">{{ produto.nome }}</a>
+        </td>
         <td data-rotulo="Categoria">{{ produto.categoria }}</td>
-        <td data-rotulo="Preço" class="num">R$ {{ '%.2f'|format(produto.preco) }}</td>
-        <td data-rotulo="Vídeos" class="num">{{ contagens.get(produto.sku, 0) }}</td>
+        <td data-rotulo="Preço" class="num">R$ {{ '%.2f'|format(produto.preco)|replace('.', ',') }}</td>
+        <td data-rotulo="Vídeos" class="num" title="Vídeos já criados para este produto">{{ contagens.get(produto.sku, 0) }}</td>
         <td data-rotulo="Fotos">
           {% if produto.pasta_drive %}
             <a href="{{ produto.pasta_drive }}" target="_blank" rel="noopener">abrir ↗</a>
           {% else %}
-            <span class="alerta">sem pasta</span>
+            <span class="alerta" title="Sem pasta de fotos o frame inicial fica ruim">sem pasta</span>
           {% endif %}
         </td>
-        <td data-rotulo="Status"><span class="etiqueta status-{{ produto.status }}">{{ produto.status }}</span></td>
+        <td data-rotulo="Situação">
+          <span class="etiqueta status-{{ produto.status }}" title="{{ explicacao }}">{{ rotulo }}</span>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-<p class="vazio" id="sem-resultado" hidden>Nenhum produto casa com esse filtro.</p>
+<p class="vazio" id="sem-resultado" hidden role="status">
+  Nenhum produto encontrado com esse texto. Tente parte do nome ou do SKU.
+</p>
 {% endif %}
 {% endblock %}
 

@@ -6,17 +6,17 @@
    digitado) precisa abrir ja no modo "outra", senao o valor sumiria. #}
 {% set categoria_livre = campos.categoria and campos.categoria not in categorias %}
 
-<nav class="trilha" aria-label="Trilha">
+<nav class="trilha" aria-label="Você está em">
   <a href="/catalogo">Catálogo</a> <span aria-hidden="true">/</span>
   <span>{{ campos.sku if existente else 'Novo produto' }}</span>
 </nav>
 
 <div class="cabecalho">
-  <h1>{{ campos.sku if existente else 'Novo produto' }}</h1>
-  <a href="/catalogo" class="botao">Voltar</a>
+  <h1>{% if existente %}Editar {{ campos.sku }}{% else %}Novo produto{% endif %}</h1>
+  <a href="/catalogo" class="botao">Cancelar</a>
 </div>
 
-{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+<p class="nota">Os campos marcados com <span class="obrigatorio">*</span> são obrigatórios.</p>
 
 <form method="post" action="/produto" class="formulario">
   <input type="hidden" name="existente" value="{{ '1' if existente else '' }}">
@@ -25,17 +25,22 @@
     <legend>O produto</legend>
 
     <label>
-      SKU
+      <span class="rotulo-campo">SKU <span class="obrigatorio" aria-hidden="true">*</span></span>
       <input name="sku" value="{{ campos.sku }}" placeholder="BLS-001"
-             {% if existente %}readonly{% endif %} required>
-      <small>
-        Código curto, só seu. Aparece no nome do arquivo do vídeo:
-        <code id="exemplo-arquivo">{{ campos.sku or 'BLS-001' }}_{{ hoje }}_a1b2c3d4e5f6.mp4</code>
+             {% if existente %}readonly aria-describedby="ajuda-sku"{% endif %} required>
+      <small id="ajuda-sku">
+        {% if existente %}
+          O SKU não muda depois de criado: ele já está nos nomes dos arquivos e no
+          histórico de vídeos deste produto.
+        {% else %}
+          Código curto de identificação, escolhido por você. Aparece no nome do
+          arquivo do vídeo: <code id="exemplo-arquivo">{{ campos.sku or 'BLS-001' }}_{{ hoje }}_a1b2c3d4e5f6.mp4</code>
+        {% endif %}
       </small>
     </label>
 
     <label>
-      Nome
+      <span class="rotulo-campo">Nome do produto <span class="obrigatorio" aria-hidden="true">*</span></span>
       <input name="nome" value="{{ campos.nome }}"
              placeholder="Bolsa de ombro em couro sintético" required>
       <small>
@@ -45,13 +50,16 @@
     </label>
 
     <label for="status">
-      Status
+      Situação
       <select id="status" name="status">
         {% for opcao in status_validos %}
-        <option value="{{ opcao }}" {% if campos.status == opcao %}selected{% endif %}>{{ opcao }}</option>
+        {% set rotulo, explicacao = rotulo_status_produto.get(opcao, (opcao, '')) %}
+        <option value="{{ opcao }}" {% if campos.status == opcao %}selected{% endif %}>
+          {{ rotulo }} — {{ explicacao }}
+        </option>
         {% endfor %}
       </select>
-      <small>Só <code>ativo</code> entra no sorteio do briefing.</small>
+      <small>Só produtos <strong>ativos</strong> entram no sorteio do briefing.</small>
     </label>
   </fieldset>
 
@@ -60,7 +68,7 @@
     <p class="nota">Estes três campos mudam o vídeo que sai. Vale caprichar.</p>
 
     <label for="categoria">
-      Categoria
+      <span class="rotulo-campo">Categoria <span class="obrigatorio" aria-hidden="true">*</span></span>
       <select id="categoria" name="categoria" required>
         <option value="" {% if not campos.categoria %}selected{% endif %} disabled>escolha…</option>
         {% for opcao in categorias %}
@@ -69,9 +77,9 @@
         <option value="{{ outra_categoria }}" {% if categoria_livre %}selected{% endif %}>outra…</option>
       </select>
       <small>
-        Decide quais cenários podem ser sorteados — "provando no espelho" só sai
-        para bolsa, nunca para caneca. Errar a grafia não dá erro: só encolhe a
-        variação, em silêncio.
+        Decide quais cenários podem ser sorteados: "provando no espelho" só sai
+        para bolsa, nunca para caneca. Escolher a categoria errada não dá erro —
+        só reduz a variação dos vídeos, sem avisar.
       </small>
     </label>
 
@@ -95,7 +103,7 @@
                value="{{ campos.preco }}" placeholder="89.90">
       </span>
       <small>
-        Use ponto decimal. Entra no prompt e pode virar gancho:
+        Preço de venda. Entra no texto do vídeo e costuma virar gancho:
         <em>"achei por R$ 89,90"</em>.
       </small>
     </label>
@@ -132,7 +140,7 @@
     <p class="nota">Não entram no vídeo — ficam à mão no cartão do dia.</p>
 
     <label>
-      Pasta de fotos no Drive
+      Pasta de fotos no Google Drive
       <input name="pasta_drive" type="url" inputmode="url" value="{{ campos.pasta_drive }}"
              placeholder="https://drive.google.com/…">
       <small>
@@ -166,7 +174,12 @@
     </label>
   </details>
 
-  <button class="primario" data-aguardando="salvando…">Salvar</button>
+  <div class="acoes-formulario">
+    <button class="primario" data-aguardando="salvando…">
+      {% if existente %}Salvar alterações{% else %}Cadastrar produto{% endif %}
+    </button>
+    <a href="/catalogo" class="botao">Cancelar</a>
+  </div>
 </form>
 {% endblock %}
 
@@ -186,13 +199,16 @@
   });
 
   // O SKU so fica concreto quando se ve o nome de arquivo que ele gera — e o
-  // nome que a pessoa vai procurar na pasta depois de baixar do Flow.
+  // nome que a pessoa vai procurar na pasta depois de baixar do Flow. So existe
+  // no cadastro novo: ao editar, o SKU e somente leitura e nao ha o que simular.
   const campoSku = document.querySelector('input[name=sku]');
   const exemplo = document.getElementById('exemplo-arquivo');
-  const modelo = exemplo.textContent;
 
-  campoSku.addEventListener('input', () => {
-    exemplo.textContent = modelo.replace(/^[^_]*/, campoSku.value.trim() || 'BLS-001');
-  });
+  if (campoSku && exemplo) {
+    const modelo = exemplo.textContent;
+    campoSku.addEventListener('input', () => {
+      exemplo.textContent = modelo.replace(/^[^_]*/, campoSku.value.trim() || 'BLS-001');
+    });
+  }
 </script>
 {% endblock %}

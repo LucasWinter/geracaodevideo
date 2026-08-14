@@ -3,9 +3,16 @@
   --superficie: #171a21;
   --superficie-2: #1e222b;
   --borda: #2a2f3a;
+  /* Contorno de campo e botao. A borda decorativa (--borda) fica em 1.3:1 com a
+     superficie, invisivel para muita gente; a WCAG pede 3:1 para o limite de um
+     controle, que e o que diz onde clicar. Dai o segundo tom. */
+  --borda-forte: #606a7e;
   --texto: #e6e8ee;
   --discreto: #9aa2b1;
   --destaque: #7aa2f7;
+  /* Texto sobre o azul cheio do botao primario. Branco sobre este azul da
+     2.5:1 — reprova na WCAG e some sob sol. Escuro sobre o mesmo azul da 7.5:1. */
+  --texto-no-destaque: #0d1b33;
   --ok: #7dcfa0;
   --alerta: #e0af68;
   --erro: #f7768e;
@@ -24,9 +31,11 @@
     --superficie: #ffffff;
     --superficie-2: #f0f2f6;
     --borda: #d9dde5;
+    --borda-forte: #858e9e;
     --texto: #1b1f27;
     --discreto: #626b7b;
     --destaque: #2f5fd0;
+    --texto-no-destaque: #ffffff;
     --ok: #1f7a4d;
     --alerta: #8a5a00;
     --erro: #c0304a;
@@ -51,7 +60,9 @@ body {
 }
 
 main {
-  max-width: 860px;
+  /* 960px: em 860 a tabela do catalogo cortava a coluna Situacao no desktop, e
+     e justamente ela que se olha para saber o que entra no sorteio. */
+  max-width: 960px;
   margin: 0 auto;
   padding: 1.25rem max(1rem, env(safe-area-inset-left)) 4rem;
   padding-bottom: calc(4rem + env(safe-area-inset-bottom));
@@ -60,7 +71,8 @@ main {
 /* Link de pulo: fora da tela ate receber foco pelo teclado. */
 .pular {
   position: absolute; left: -999px; top: 0; z-index: 20;
-  background: var(--destaque); color: #fff; padding: .6rem 1rem;
+  background: var(--destaque); color: var(--texto-no-destaque); padding: .6rem 1rem;
+  font-weight: 600;
   border-radius: 0 0 var(--raio) 0; text-decoration: none;
 }
 .pular:focus { left: 0; }
@@ -133,10 +145,9 @@ h2 { font-size: 1.05rem; margin: 0; }
 .dias input[type="date"] {
   font: inherit; font-size: 1rem; padding: .3rem .5rem; border-radius: 6px;
   min-height: var(--toque);
-  border: 1px solid var(--borda); background: var(--superficie); color: var(--texto);
+  border: 1px solid var(--borda-forte); background: var(--superficie); color: var(--texto);
 }
 .voltar-hoje { border-color: var(--destaque) !important; color: var(--destaque) !important; }
-.resumo { color: var(--discreto); font-size: .9rem; margin-top: 0; }
 
 /* ------------------------------------------------------------------ card */
 
@@ -167,24 +178,28 @@ h2 { font-size: 1.05rem; margin: 0; }
 }
 
 button, .botao {
-  font: inherit; font-size: .85rem; cursor: pointer;
+  font: inherit; font-size: .875rem; cursor: pointer;
   background: var(--superficie-2); color: var(--texto);
-  border: 1px solid var(--borda); border-radius: 6px;
+  border: 1px solid var(--borda-forte); border-radius: 6px;
   padding: .3rem .7rem; text-decoration: none;
   display: inline-flex; align-items: center; justify-content: center;
   min-height: var(--toque);
 }
 button:hover, .botao:hover { border-color: var(--destaque); }
 button.copiado { color: var(--ok); border-color: var(--ok); }
-button[disabled] { opacity: .6; cursor: progress; }
+button[disabled] { opacity: .75; cursor: progress; }
 
 .primario {
   background: var(--destaque); border-color: var(--destaque);
-  color: #fff; font-weight: 600; padding: .5rem 1rem;
+  color: var(--texto-no-destaque); font-weight: 600; padding: .5rem 1rem;
+  font-size: .95rem;
 }
 .primario:hover { border-color: var(--destaque); filter: brightness(1.08); }
-.link { background: none; border: none; color: var(--discreto); padding: .3rem .5rem; }
-.link:hover { color: var(--texto); border-color: transparent; }
+.link {
+  background: none; border: none; color: var(--texto);
+  padding: .3rem .5rem; font-size: .85rem;
+}
+.link:hover { color: var(--destaque); border-color: transparent; text-decoration: underline; }
 
 /* --------------------------------------------------------------- etiquetas */
 
@@ -203,7 +218,10 @@ button[disabled] { opacity: .6; cursor: progress; }
 .tabela-rolagem { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--borda); white-space: nowrap; }
-td.livre { white-space: normal; }
+/* O nome do produto e o unico campo de tamanho imprevisivel: deixa-lo quebrar e
+   o que mantem as sete colunas dentro da tela sem rolagem lateral. */
+td.livre { white-space: normal; min-width: 12rem; }
+td.cod { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 th { color: var(--discreto); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
 td a { color: var(--destaque); }
 tbody tr:hover td { background: var(--superficie-2); }
@@ -213,7 +231,7 @@ tbody tr:hover td { background: var(--superficie-2); }
 .filtro input {
   font: inherit; font-size: 1rem; width: 100%; max-width: 26rem;
   padding: .5rem .7rem; border-radius: 6px; min-height: var(--toque);
-  border: 1px solid var(--borda); background: var(--superficie); color: var(--texto);
+  border: 1px solid var(--borda-forte); background: var(--superficie); color: var(--texto);
 }
 
 /* -------------------------------------------------------------- formulario */
@@ -233,15 +251,22 @@ tbody tr:hover td { background: var(--superficie-2); }
      focar o campo e a pessoa perde o enquadramento da pagina. */
   font: inherit; font-size: 1rem;
   padding: .5rem .6rem; border-radius: 6px; min-height: var(--toque);
-  border: 1px solid var(--borda); background: var(--superficie); color: var(--texto);
+  border: 1px solid var(--borda-forte); background: var(--superficie); color: var(--texto);
 }
+/* Rotulo do campo com o mesmo peso do texto: em cinza claro ele competia em
+   legibilidade com a dica de apoio, que e secundaria. */
+.formulario > label, .grupo > label, .caixas > .livre { color: var(--texto); }
+.formulario label > small { font-weight: 400; }
 .formulario input:focus-visible, .formulario select:focus-visible {
   outline: 2px solid var(--destaque); outline-offset: -1px;
 }
-.formulario input[readonly] { opacity: .6; }
+/* Campo so-leitura: fundo diferente diz que nao se edita sem apagar o
+   contraste do texto, que era o que `opacity: .6` fazia. */
+.formulario input[readonly] {
+  background: var(--superficie-2); color: var(--discreto); cursor: not-allowed;
+}
 .formulario small { color: var(--discreto); font-size: .78rem; }
 .formulario .primario { justify-self: start; }
-.dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 
 /* Foco visível em tudo que recebe teclado — some com o rato, aparece com Tab. */
 a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
@@ -274,7 +299,7 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
    linha de texto de apoio. */
 .com-prefixo {
   display: flex; align-items: stretch;
-  border: 1px solid var(--borda); border-radius: 6px;
+  border: 1px solid var(--borda-forte); border-radius: 6px;
   background: var(--superficie); overflow: hidden;
 }
 .com-prefixo:focus-within { outline: 2px solid var(--destaque); outline-offset: -1px; }
@@ -304,8 +329,8 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .gerar label { font-size: .85rem; color: var(--discreto); }
 .gerar select {
   font: inherit; font-size: 1rem; padding: .35rem .5rem; border-radius: 6px;
-  min-height: var(--toque);
-  border: 1px solid var(--borda); background: var(--superficie); color: var(--texto);
+  min-height: var(--toque); max-width: 100%;
+  border: 1px solid var(--borda-forte); background: var(--superficie); color: var(--texto);
 }
 
 /* ----------------------------------------------------------------- avisos */
@@ -321,23 +346,41 @@ a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visibl
 .alerta { color: var(--alerta); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; }
 
-details summary { cursor: pointer; color: var(--discreto); font-size: .85rem; min-height: var(--toque); display: flex; align-items: center; }
+/* `display: flex` no summary apaga o triangulo que o navegador desenha, e sem
+   ele "Blocos sorteados" virava texto cinza que ninguem clicava. O marcador
+   volta desenhado a mao, e gira ao abrir. */
+details summary {
+  cursor: pointer; color: var(--texto); font-size: .875rem;
+  min-height: var(--toque); display: flex; align-items: center; gap: .45rem;
+  list-style: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: "▸"; color: var(--destaque); font-size: .9em;
+  transition: transform .15s ease; flex: 0 0 auto;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+details summary:hover { color: var(--destaque); }
 details pre { white-space: pre-wrap; word-break: break-all; font-size: .8rem; }
 
 /* ------------------------------------------------------------------ login */
 
-.login { max-width: 340px; margin: 12vh auto 0; }
+.login { max-width: 340px; margin: 10vh auto 0; }
 .login h1 { color: var(--destaque); font-size: 2rem; margin-bottom: .1rem; }
 .login p { margin-top: 0; }
+.login .subtitulo { color: var(--discreto); margin-bottom: 1.5rem; }
 .login .formulario { margin-top: 1.5rem; }
 .login .primario { justify-self: stretch; text-align: center; }
+/* Colado no botao, o "Esqueci minha senha" parecia parte dele. Precisa do
+   `.login` na frente para ganhar de `.login p { margin-top: 0 }`. */
+.login .rodape-login { margin-top: 1.5rem; font-size: .9rem; }
 
 /* ------------------------------------------------------------------ mobile */
 
 @media (max-width: 640px) {
   :root {
     --toque: 2.75rem;        /* 44px: minimo confortavel para o dedo */
-    --topo-altura: 6.25rem;  /* duas linhas: identidade em cima, abas embaixo */
+    --topo-altura: 6.75rem;  /* duas linhas: identidade em cima, abas embaixo */
   }
 
   /* Com quatro abas mais "senha" e "sair", 390px cortava as palavras no meio
@@ -356,7 +399,6 @@ details pre { white-space: pre-wrap; word-break: break-all; font-size: .8rem; }
      competiria com ela, e a trilha acima ja resolve a volta. */
   .cabecalho > .gerar, .cabecalho > .primario { width: 100%; }
   .cabecalho .gerar .primario { flex: 1 1 auto; }
-  .dupla { grid-template-columns: 1fr; }
   .grade-caixas { grid-template-columns: 1fr 1fr; }
   .formulario { max-width: none; }
   .formulario .primario { justify-self: stretch; }
@@ -408,12 +450,6 @@ details pre { white-space: pre-wrap; word-break: break-all; font-size: .8rem; }
 
 .topo .sair { display: flex; align-items: center; gap: .25rem; margin-left: auto; }
 .topo .sair a.link { text-decoration: none; }
-
-.aviso {
-  background: color-mix(in srgb, var(--ok) 14%, transparent);
-  border: 1px solid var(--ok); color: var(--ok);
-  padding: .6rem .8rem; border-radius: var(--raio);
-}
 
 /* O formulario de parametros vive dentro de um card, que ja tem a moldura. */
 .card > .formulario { max-width: none; }
@@ -470,28 +506,113 @@ details pre { white-space: pre-wrap; word-break: break-all; font-size: .8rem; }
 .caixa-descrita strong { font-size: .9rem; font-weight: 600; }
 .caixa-descrita small { color: var(--discreto); font-size: .78rem; line-height: 1.4; }
 
-/* Faixa de acoes do dia: gerar avulso e refazer. */
-.acoes-dia {
-  display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;
-  margin-bottom: 1.25rem; padding: .75rem;
-  border: 1px solid var(--borda); border-radius: var(--raio);
-  background: var(--superficie);
-}
-.acoes-dia .gerar { margin: 0; }
-.acoes-dia select { max-width: 100%; }
 .descartar { margin: 0; }
 .descartar button { color: var(--discreto); }
 .descartar button:hover { color: var(--erro); border-color: var(--erro); }
 
 @media (max-width: 640px) {
   .grade-descritos { grid-template-columns: 1fr; }
-  .acoes-dia { flex-direction: column; align-items: stretch; }
-  .acoes-dia .gerar { flex-direction: column; align-items: stretch; }
-  .acoes-dia .gerar select, .acoes-dia .gerar button { width: 100%; }
 }
 
 /* iPhone SE e afins: as quatro abas so cabem com a fonte um pouco menor. Sem
    isto sobra meia palavra na borda, que parece defeito e nao truncamento. */
 @media (max-width: 380px) {
   .topo nav a { font-size: .92rem; padding: .3rem .5rem; }
+}
+
+/* ================================================================ retorno
+   Toda ação que muda dados volta dizendo o que aconteceu. Antes o painel
+   redirecionava em silêncio e a única prova de que algo funcionou era
+   procurar o resultado na tela. */
+
+.sucesso {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid var(--ok); color: var(--ok);
+  padding: .6rem .8rem .6rem 2.2rem; border-radius: var(--raio);
+  position: relative; margin: 0 0 1.25rem;
+}
+.sucesso::before {
+  content: "✓"; position: absolute; left: .8rem; font-weight: 700;
+}
+.erro { margin: 0 0 1.25rem; }
+
+/* Retorno das ações que não recarregam a página (copiar). Fica preso ao rodapé
+   para aparecer no mesmo lugar em qualquer tela, inclusive no celular. */
+.aviso-flutuante {
+  position: fixed; z-index: 30;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  max-width: min(30rem, calc(100vw - 2rem));
+  background: var(--texto); color: var(--fundo);
+  padding: .6rem 1rem; border-radius: 999px;
+  font-size: .875rem; font-weight: 500; text-align: center;
+  box-shadow: 0 6px 24px rgb(0 0 0 / .35);
+}
+
+/* Botão esperando resposta: além de desabilitado, um ponto pulsando diz que a
+   espera é do sistema e não travamento. */
+button.ocupado { cursor: progress; opacity: .85; }
+button.ocupado::before {
+  content: ""; width: .5rem; height: .5rem; border-radius: 50%;
+  background: currentColor; margin-right: .45rem;
+  animation: pulsar 1s ease-in-out infinite;
+}
+@keyframes pulsar { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+
+/* ====================================================== ações do briefing
+   A ação principal do dia ganha um painel próprio; gerar avulso e refazer,
+   que são exceções, descem para uma faixa secundária dentro dele. */
+
+.painel-acoes {
+  border: 1px solid var(--borda); border-radius: var(--raio);
+  background: var(--superficie); padding: 1rem; margin-bottom: 1.25rem;
+}
+.painel-acoes > .vazio, .painel-acoes > .nota { margin: 0; }
+.destaque-acao { align-items: center; }
+.destaque-acao label { font-size: .95rem; color: var(--texto); font-weight: 600; }
+.destaque-acao .nota { flex-basis: 100%; margin-top: .35rem; }
+.larga { flex-basis: 100%; }
+
+.acoes-secundarias {
+  display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;
+  margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--borda);
+}
+.acoes-secundarias .gerar label { font-size: .85rem; }
+.titulo-lista { font-size: 1.05rem; }
+
+/* Passos numerados do cartão: prompt, gancho, legenda e nome do arquivo são
+   uma sequência, não três caixas soltas com o mesmo peso. */
+.bloco-topo .passo {
+  display: inline-flex; align-items: center; gap: .45rem;
+  text-transform: none; letter-spacing: normal; font-size: .85rem;
+  color: var(--texto); font-weight: 600;
+}
+.bloco-topo .numero {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.35rem; height: 1.35rem; border-radius: 50%;
+  background: var(--destaque); color: var(--texto-no-destaque);
+  font-size: .75rem; font-weight: 700; flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------ formulários */
+
+/* `.formulario label` e um grid: texto e asterisco precisam vir no mesmo filho,
+   senao o `*` cai numa linha propria. */
+.rotulo-campo { display: block; }
+.obrigatorio { color: var(--erro); font-weight: 700; }
+.acoes-formulario { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+.acoes-formulario .primario { flex: 0 0 auto; }
+.detalhe-tecnico { margin-top: 1.5rem; }
+.detalhe-tecnico .erro { margin: .5rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; }
+
+@media (max-width: 640px) {
+  .acoes-secundarias { flex-direction: column; align-items: stretch; }
+  .acoes-secundarias .gerar { flex-direction: column; align-items: stretch; }
+  .acoes-secundarias .gerar select, .acoes-secundarias .gerar button { width: 100%; }
+  .destaque-acao { flex-direction: column; align-items: stretch; }
+  .destaque-acao select, .destaque-acao .primario { width: 100%; }
+  .acoes-formulario { flex-direction: column; align-items: stretch; }
+  .acoes-formulario .botao, .acoes-formulario .primario { width: 100%; }
+  /* Um cartão de produto por vez já é largo; o nome não precisa de mínimo. */
+  .tabela-cartoes td.livre { min-width: 0; }
 }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import unquote
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -197,7 +199,7 @@ def test_prompt_aparece_na_pagina_para_copiar(logado):
 
     resposta = logado.get("/")
 
-    assert "Prompt (Flow / Veo)" in resposta.text
+    assert "Prompt — cole no Flow" in resposta.text
     assert "data-copiar=" in resposta.text
 
 
@@ -249,11 +251,14 @@ def test_editar_produto_preenche_o_formulario(logado):
     assert 'value="89.90"' in resposta.text
 
 
-def test_produto_inexistente_volta_para_o_catalogo(logado):
+def test_produto_inexistente_volta_para_o_catalogo_avisando(logado):
+    """Voltar calado fazia a pessoa achar que tinha clicado no lugar errado."""
     resposta = logado.get("/produto/NAO-EXISTE", follow_redirects=False)
 
     assert resposta.status_code == 303
-    assert resposta.headers["location"] == "/catalogo"
+    destino = resposta.headers["location"]
+    assert destino.startswith("/catalogo?erro=")
+    assert "NAO-EXISTE" in unquote(destino)
 
 
 def test_salvar_produto_novo(logado, catalogo_web):
@@ -281,7 +286,7 @@ def test_status_invalido_e_recusado_no_formulario(logado, catalogo_web):
         data={"sku": "X-1", "nome": "X", "categoria": "casa", "status": "inventado"},
     )
 
-    assert "status invalido" in resposta.text
+    assert "Status inválido" in resposta.text
     assert catalogo_web.buscar_produto("X-1") is None
 
 
@@ -292,7 +297,7 @@ def test_preco_nao_numerico_e_recusado(logado, catalogo_web):
               "preco": "quarenta", "status": "ativo"},
     )
 
-    assert "numeros" in resposta.text
+    assert "precisam ser números" in resposta.text
     assert catalogo_web.buscar_produto("X-1") is None
 
 
@@ -396,7 +401,7 @@ def test_erro_no_formulario_preserva_o_que_foi_digitado(logado):
               "preco": "quarenta", "status": "ativo", "angulos": ["frontal"]},
     )
 
-    assert "numeros" in resposta.text
+    assert "precisam ser números" in resposta.text
     assert 'value="Nome Digitado"' in resposta.text
     assert 'value="casa" selected' in resposta.text
 
@@ -488,7 +493,7 @@ def test_matriz_aparece_so_para_leitura(logado):
 
     assert resposta.status_code == 200
     assert "gancho_pov" in resposta.text
-    assert "Só leitura" in resposta.text
+    assert "só de consulta" in resposta.text
 
 
 # ---------------------------------------------------------------- parametros
@@ -538,8 +543,24 @@ def test_valor_de_eixo_exige_ingles(logado, catalogo_web):
         follow_redirects=False,
     )
 
-    assert "ingles" in resposta.headers["location"]
+    assert resposta.status_code == 200
+    assert "inglês é obrigatória" in resposta.text
     assert catalogo_web.parametros() == []
+
+
+def test_erro_em_parametros_devolve_o_formulario_preenchido(logado):
+    """Antes qualquer recusa redirecionava e apagava o que tinha sido digitado."""
+    resposta = logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "cenario", "texto": "varanda ao entardecer",
+              "en": "  ", "descricao": "fim de tarde"},
+        follow_redirects=False,
+    )
+
+    html = " ".join(resposta.text.split())
+    assert 'value="varanda ao entardecer"' in html
+    assert 'value="fim de tarde"' in html
+    assert 'value="cenario" selected' in html
 
 
 def test_eixo_invalido_e_recusado(logado, catalogo_web):
@@ -549,7 +570,7 @@ def test_eixo_invalido_e_recusado(logado, catalogo_web):
         follow_redirects=False,
     )
 
-    assert "eixo+invalido" in resposta.headers["location"].replace("%20", "+")
+    assert "Eixo inválido" in resposta.text
     assert catalogo_web.parametros() == []
 
 
@@ -560,7 +581,7 @@ def test_texto_sem_letras_nao_gera_chave(logado, catalogo_web):
         follow_redirects=False,
     )
 
-    assert "erro=" in resposta.headers["location"]
+    assert "pelo menos uma letra" in resposta.text
     assert catalogo_web.parametros() == []
 
 
@@ -649,7 +670,7 @@ def test_redefinir_sem_token_avisa(deslogado):
                             "senha2": "senha-longa-1"}
     )
 
-    assert "link inv" in resposta.text
+    assert "link não é válido" in resposta.text
 
 
 def test_redefinir_devolve_o_token_quando_a_senha_nao_confere(deslogado):
@@ -660,7 +681,7 @@ def test_redefinir_devolve_o_token_quando_a_senha_nao_confere(deslogado):
               "senha": "senha-longa-1", "senha2": "outra-senha-2"},
     )
 
-    assert "nao sao iguais" in resposta.text
+    assert "não são iguais" in resposta.text
     assert 'value="tok-abc"' in resposta.text
 
 
@@ -711,7 +732,7 @@ def test_trocar_senha_recusa_divergente(logado, monkeypatch):
 
     resposta = logado.post("/senha", data={"senha": "senha-longa-1", "senha2": "diferente-2"})
 
-    assert "nao sao iguais" in resposta.text
+    assert "não são iguais" in resposta.text
 
 
 def test_login_oferece_recuperacao(deslogado):
@@ -747,7 +768,7 @@ def test_parametros_indisponivel_nao_derruba_a_pagina(logado, parametros_quebrad
     resposta = logado.get(caminho)
 
     assert resposta.status_code == 200
-    assert "Parâmetros do painel indisponíveis" in resposta.text
+    assert "Os parâmetros criados no painel não carregaram" in resposta.text
 
 
 @pytest.mark.parametrize("caminho", ["/", "/catalogo"])
@@ -940,7 +961,7 @@ def test_gerar_avulso_recusa_sku_inexistente(logado, catalogo_web):
         "/briefing/produto", data={"sku": "NAO-EXISTE"}, follow_redirects=False
     )
 
-    assert "nao+encontrado" in resposta.headers["location"].replace("%20", "+")
+    assert "NAO-EXISTE" in unquote(resposta.headers["location"])
     assert catalogo_web.videos() == []
 
 
@@ -1036,3 +1057,148 @@ def test_angulo_criado_no_painel_mostra_a_descricao_no_produto(logado):
     html = logado.get("/produto/novo").text
 
     assert "O produto fechado, ocupando pouco espaço." in html
+
+
+# ------------------------------------------------- retorno visivel das acoes
+
+def test_gerar_briefing_volta_dizendo_quantos_saiu(logado):
+    """Redirecionar em silencio deixava a duvida de se a geracao funcionou."""
+    resposta = logado.post("/briefing", data={"qtd": 2}, follow_redirects=False)
+
+    assert unquote(resposta.headers["location"].replace("+", " ")) == "/?ok=2 vídeos prontos."
+
+
+def test_salvar_produto_confirma_na_volta(logado):
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "OK-1", "nome": "X", "categoria": "casa", "status": "ativo"},
+        follow_redirects=False,
+    )
+
+    assert "ok=" in resposta.headers["location"]
+    assert "OK-1" in unquote(resposta.headers["location"])
+
+
+def test_mensagem_com_e_comercial_nao_quebra_a_url(logado, catalogo_web, monkeypatch):
+    """Interpolar a mensagem crua truncava o aviso no primeiro `&` ou `#`."""
+    def falhar(*_args, **_kwargs):
+        raise ErroCatalogo("falhou em produtos & videos #42")
+
+    monkeypatch.setattr(type(catalogo_web), "registrar", falhar)
+
+    resposta = logado.post("/briefing", data={"qtd": 1}, follow_redirects=False)
+
+    destino = resposta.headers["location"]
+    assert "&" not in destino.split("?", 1)[1].replace("&amp;", "")  # so um parametro
+    assert "#42" in unquote(destino)
+
+
+# ------------------------------------------------------ protecoes de dados
+
+def test_produto_novo_nao_sobrescreve_sku_existente(logado, catalogo_web):
+    """Salvar e upsert: sem esta checagem o cadastro apagava o produto homonimo."""
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "BLS-001", "nome": "Outro produto", "categoria": "casa",
+              "status": "ativo"},
+    )
+
+    assert "Já existe um produto com o SKU BLS-001" in resposta.text
+    assert catalogo_web.buscar_produto("BLS-001").nome == "Bolsa"
+
+
+def test_editar_produto_existente_continua_salvando(logado, catalogo_web):
+    """A protecao de SKU duplicado nao pode travar a edicao do proprio produto."""
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "BLS-001", "nome": "Bolsa renomeada", "categoria": "bolsas",
+              "status": "ativo", "existente": "1"},
+        follow_redirects=False,
+    )
+
+    assert resposta.status_code == 303
+    assert catalogo_web.buscar_produto("BLS-001").nome == "Bolsa renomeada"
+
+
+def test_preco_com_virgula_e_aceito(logado, catalogo_web):
+    """Virgula decimal e o padrao brasileiro; recusar por isso era so atrito."""
+    logado.post(
+        "/produto",
+        data={"sku": "VIR-1", "nome": "X", "categoria": "casa",
+              "preco": "1.299,90", "margem": "42,5", "status": "ativo"},
+        follow_redirects=False,
+    )
+
+    salvo = catalogo_web.buscar_produto("VIR-1")
+    assert salvo.preco == pytest.approx(1299.90)
+    assert salvo.margem == pytest.approx(0.425)
+
+
+# ------------------------------------------------------------- navegacao
+
+def test_seletor_de_data_nao_passa_de_hoje(logado):
+    """Com max no dia seguinte ao exibido, voltar para hoje era impossivel."""
+    from datetime import date
+
+    html = " ".join(logado.get("/?data=2020-01-01").text.split())
+
+    assert f'max="{date.today().isoformat()}"' in html
+    assert 'href="/" class="voltar-hoje"' in html
+
+
+def test_dia_de_hoje_nao_oferece_dia_seguinte(logado):
+    """Dia futuro nunca tem briefing: o link so levaria a uma pagina vazia."""
+    assert "Ver o dia seguinte" not in logado.get("/").text
+
+
+# --------------------------------------------------------- compreensibilidade
+
+def test_status_do_video_aparece_em_portugues_comum(logado):
+    """"briefado" nao diz a ninguem em que ponto do fluxo o video esta."""
+    logado.post("/briefing", data={"qtd": 1})
+
+    html = logado.get("/").text
+
+    assert "A gerar" in html
+    assert ">briefado<" not in html
+
+
+def test_status_do_produto_aparece_em_portugues_comum(logado, catalogo_web):
+    catalogo_web.salvar_produto(
+        Produto("EST-1", "Sem estoque", "casa", 1.0, 0.1, "", "", [], "esgotado")
+    )
+
+    html = logado.get("/catalogo").text
+
+    assert "Sem estoque" in html
+    assert ">esgotado<" not in html
+
+
+def test_todo_botao_de_copiar_diz_o_que_copia(logado):
+    """Quatro botoes "Copiar" iguais sao indistinguiveis num leitor de tela."""
+    logado.post("/briefing", data={"qtd": 1})
+
+    html = " ".join(logado.get("/").text.split())
+
+    for rotulo in ("Copiar o prompt", "Copiar o gancho", "Copiar a legenda",
+                   "Copiar o nome do arquivo"):
+        assert rotulo in html
+
+
+def test_preco_com_virgula_sobrevive_a_erro_de_outro_campo(logado):
+    """<input type=number> apaga "89,90"; o valor volta ja normalizado."""
+    resposta = logado.post(
+        "/produto",
+        data={"sku": "   ", "nome": "X", "categoria": "casa", "preco": "89,90",
+              "status": "ativo"},
+    )
+
+    assert 'value="89.9"' in " ".join(resposta.text.split())
+
+
+def test_formulario_incompleto_vira_pagina_e_nao_json(logado_sem_estourar):
+    """O padrao do FastAPI responderia o JSON de validacao para quem usa o painel."""
+    resposta = logado_sem_estourar.post("/produto", data={"nome": "sem sku"})
+
+    assert "Faltou preencher alguma coisa" in resposta.text
+    assert "sku" in resposta.text

@@ -1,18 +1,19 @@
 {% extends "base.html" %}
-{% block titulo %}Matriz de blocos{% endblock %}
+{% block titulo %}Matriz de opções{% endblock %}
 
 {% block conteudo %}
 <div class="cabecalho">
-  <h1>Matriz de blocos</h1>
+  <h1>Matriz de opções</h1>
 </div>
 
 <p class="vazio">
-  Só leitura, e é a matriz completa: o que vem do <code>data/blocos.yaml</code>
-  versionado mais o que foi criado em <a href="/parametros">Parâmetros</a>, que é
-  onde se adiciona valor sem deploy. Os criados pelo painel aparecem marcados.
+  Todas as opções que o sorteio pode combinar hoje, agrupadas pelo que cada uma
+  muda no vídeo. Esta tela é só de consulta — para acrescentar uma opção, use
+  <a href="/parametros">Parâmetros</a>. O que foi criado por lá aparece marcado
+  com a etiqueta <span class="etiqueta">painel</span>.
 </p>
 
-<nav class="atalhos" aria-label="Ir para um eixo">
+<nav class="atalhos" aria-label="Ir para um grupo de opções">
   {% for eixo in eixos %}
   <a href="#eixo-{{ eixo }}">{{ descricao_eixo[eixo][0] if eixo in descricao_eixo else eixo }}</a>
   {% endfor %}
@@ -24,7 +25,7 @@
   <header>
     <h2>{{ titulo }}</h2>
     <span class="etiqueta"><code>{{ eixo }}</code></span>
-    <span class="etiqueta">{{ matriz.eixos[eixo]|length }} valores</span>
+    <span class="etiqueta">{{ matriz.eixos[eixo]|length }} opç{{ 'ão' if matriz.eixos[eixo]|length == 1 else 'ões' }}</span>
   </header>
 
   {% if explicacao %}<p class="nota">{{ explicacao }}</p>{% endif %}
@@ -49,7 +50,9 @@
         {% for chave, conteudo in valor.extras.items() %}{{ chave }}: {{ conteudo }}{{ ' · ' if not loop.last }}{% endfor %}
       </p>
       {% endif %}
-      <p class="discreto miudo">id <code>{{ valor.id }}</code> — entra no hash, nunca renomeie</p>
+      <p class="discreto miudo">
+        Identificador <code>{{ valor.id }}</code> — usado para não repetir combinações.
+      </p>
     </li>
     {% endfor %}
   </ul>
@@ -59,9 +62,9 @@
 <article class="card">
   <header><h2>Termos proibidos</h2></header>
   <p class="nota">
-    Filtro determinístico sobre tudo que o redator produz. Se o Gemini escorregar
-    num claim de eficácia, a saída é descartada e o template assume. Instrução de
-    prompt não é controle — esta lista é.
+    Palavras que nunca podem sair no texto de um vídeo — promessas de cura, de
+    resultado garantido e afins. Se o texto gerado contiver qualquer uma delas,
+    ele é descartado automaticamente e um texto seguro entra no lugar.
   </p>
   <p>{% for termo in matriz.termos_proibidos %}<span class="etiqueta">{{ termo }}</span> {% endfor %}</p>
 </article>

@@ -2,12 +2,15 @@
 {% set mostrar_nav = false %}
 {% block titulo %}Entrar{% endblock %}
 
+{# O erro aparece dentro do cartão, junto do formulário. #}
+{% block avisos %}{% endblock %}
+
 {% block conteudo %}
 <div class="login">
   <h1>gdv</h1>
-  <p class="discreto">Painel de geração de vídeos</p>
+  <p class="subtitulo">Painel de geração de vídeos para o TikTok Shop</p>
 
-  {% if erro %}<p class="erro">{{ erro }}</p>{% endif %}
+  {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
   <form method="post" action="/login" class="formulario">
     <label>
@@ -21,6 +24,6 @@
     <button class="primario" data-aguardando="entrando…">Entrar</button>
   </form>
 
-  <p class="discreto"><a href="/recuperar">Esqueci minha senha</a></p>
+  <p class="rodape-login"><a href="/recuperar">Esqueci minha senha</a></p>
 </div>
 {% endblock %}

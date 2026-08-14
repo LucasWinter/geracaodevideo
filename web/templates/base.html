@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
-  <title>{% block titulo %}gdv{% endblock %}</title>
+  <title>{% block titulo %}Painel de vídeos{% endblock %} · gdv</title>
+  {# Favicon embutido: sem ele o navegador pede /favicon.ico e leva 404 em toda
+     visita, e a aba fica sem identidade no meio de outras. #}
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f5fd0'/><path d='M12 9l10 7-10 7z' fill='white'/></svg>">
   <link rel="stylesheet" href="/static/estilo.css">
 </head>
 <body>
@@ -16,7 +19,7 @@
   {% set secao = '/catalogo' if atual.startswith('/produto') else atual %}
   <header class="topo">
     <a href="/" class="marca">gdv</a>
-    <nav aria-label="Seções">
+    <nav aria-label="Seções do painel">
       {% for href, rotulo in [
         ('/', 'Briefing'), ('/catalogo', 'Catálogo'),
         ('/parametros', 'Parâmetros'), ('/blocos', 'Matriz')
@@ -26,8 +29,8 @@
       {% endfor %}
     </nav>
     <div class="sair">
-      <a href="/senha" class="link" title="Trocar senha">senha</a>
-      <form method="post" action="/logout"><button class="link">sair</button></form>
+      <a href="/senha" class="link">Minha senha</a>
+      <form method="post" action="/logout"><button class="link" data-aguardando="saindo…">Sair</button></form>
     </div>
   </header>
   {% endif %}
@@ -37,32 +40,59 @@
        matriz do blocos.yaml e diz o motivo aqui, em vez de responder 500. #}
     {% if aviso_parametros %}
     <p class="erro" role="alert">
-      Parâmetros do painel indisponíveis — usando só o <code>blocos.yaml</code>.
-      <br><span class="discreto">{{ aviso_parametros }}</span>
+      <strong>Os parâmetros criados no painel não carregaram.</strong>
+      O sorteio continua funcionando com a matriz de fábrica.
+      <br><span class="discreto">Detalhe técnico: {{ aviso_parametros }}</span>
     </p>
     {% endif %}
+
+    {# Um lugar só para o retorno de qualquer ação: as telas que mostram o erro
+       dentro do próprio cartão (login, recuperação) esvaziam este bloco. #}
+    {% block avisos %}
+      {% if ok %}<p class="sucesso" role="status">{{ ok }}</p>{% endif %}
+      {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+    {% endblock %}
 
     {% block conteudo %}{% endblock %}
   </main>
 
+  {# Retorno das ações rápidas (copiar, principalmente). role=status faz o
+     leitor de tela anunciar sem roubar o foco de quem está navegando. #}
+  <div id="aviso-flutuante" class="aviso-flutuante" role="status" aria-live="polite" hidden></div>
+
   <script>
+    const avisoFlutuante = document.getElementById('aviso-flutuante');
+    let sumirAviso;
+
+    function avisar(texto) {
+      avisoFlutuante.textContent = texto;
+      avisoFlutuante.hidden = false;
+      clearTimeout(sumirAviso);
+      sumirAviso = setTimeout(() => { avisoFlutuante.hidden = true; }, 2600);
+    }
+
     document.addEventListener('click', async (evento) => {
       const botao = evento.target.closest('[data-copiar]');
       if (!botao) return;
       const alvo = document.getElementById(botao.dataset.copiar);
+      const nome = botao.dataset.nome || 'texto';
       try {
         await navigator.clipboard.writeText(alvo.innerText);
         const antes = botao.textContent;
-        botao.textContent = 'copiado';
+        botao.textContent = 'Copiado!';
         botao.classList.add('copiado');
-        setTimeout(() => { botao.textContent = antes; botao.classList.remove('copiado'); }, 1500);
+        avisar(nome + ' copiado. Agora é só colar.');
+        setTimeout(() => { botao.textContent = antes; botao.classList.remove('copiado'); }, 1800);
       } catch {
-        // clipboard exige contexto seguro; em http:// o usuario seleciona na mao
+        // clipboard exige contexto seguro; em http:// a cópia automática não
+        // existe. Selecionar sem avisar parecia defeito — agora o texto fica
+        // selecionado E a pessoa é instruída a usar Ctrl+C.
         const selecao = window.getSelection();
         const faixa = document.createRange();
         faixa.selectNodeContents(alvo);
         selecao.removeAllRanges();
         selecao.addRange(faixa);
+        avisar('Selecionei o texto para você — copie com Ctrl+C (ou ⌘+C).');
       }
     });
 
@@ -83,6 +113,8 @@
       botao.dataset.rotulo = botao.textContent;
       botao.textContent = botao.dataset.aguardando || 'enviando…';
       botao.disabled = true;
+      botao.classList.add('ocupado');
+      formulario.setAttribute('aria-busy', 'true');
     });
 
     // Com a barra rolando no celular, a aba em que voce esta pode nascer fora
@@ -96,7 +128,9 @@
       document.querySelectorAll('button[data-rotulo]').forEach((botao) => {
         botao.textContent = botao.dataset.rotulo;
         botao.disabled = false;
+        botao.classList.remove('ocupado');
         delete botao.dataset.rotulo;
+        if (botao.form) botao.form.removeAttribute('aria-busy');
       });
     });
   </script>

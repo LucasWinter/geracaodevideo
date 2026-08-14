@@ -17,8 +17,10 @@ import sys
 from collections.abc import Sequence
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -31,6 +33,8 @@ from gdv.modelos import (
     ANGULOS_DETALHADOS,
     DESCRICAO_EIXO,
     EIXOS,
+    ROTULO_STATUS_PRODUTO,
+    ROTULO_STATUS_VIDEO,
     STATUS_PRODUTO,
     TIPOS_PARAMETRO,
     Parametro,
@@ -57,6 +61,11 @@ if ESTATICOS.is_dir():
 
 templates = Jinja2Templates(directory=str(MODELOS))
 
+# Disponiveis em todo template: o status gravado e uma chave tecnica
+# ("briefado", "esgotado") e nenhuma tela deve mostrar a chave crua.
+templates.env.globals["rotulo_status_video"] = ROTULO_STATUS_VIDEO
+templates.env.globals["rotulo_status_produto"] = ROTULO_STATUS_PRODUTO
+
 PUBLICAS = {"/login", "/static", "/favicon.ico", "/saude", "/recuperar", "/redefinir"}
 
 
@@ -82,6 +91,75 @@ def catalogo_de(request: Request):
 
 def _pagina(request: Request, template: str, **contexto) -> HTMLResponse:
     return templates.TemplateResponse(request, template, contexto)
+
+
+def _ir_para(caminho: str, **avisos: str) -> RedirectResponse:
+    """Redireciona levando o aviso na query, sempre escapado.
+
+    Antes a mensagem era interpolada crua (`f"/?erro={exc}"`): texto com `&`,
+    `#` ou `%` truncava o aviso no meio ou quebrava a URL inteira. `urlencode`
+    resolve os tres casos.
+
+    `ok=` e o par de `erro=`: toda acao que muda dados volta dizendo o que fez,
+    porque redirecionar em silencio deixa a pessoa sem saber se funcionou.
+    """
+    limpos = {chave: valor for chave, valor in avisos.items() if valor}
+    destino = f"{caminho}?{urlencode(limpos)}" if limpos else caminho
+    return RedirectResponse(destino, status_code=303)
+
+
+def _explicar(exc: Exception) -> str:
+    """Traduz a falha para quem nao conhece o pipeline por dentro.
+
+    As mensagens do motor citam `blocos.yaml`, `produtos.csv` e `--janela`:
+    corretas no terminal, inuteis para quem so abre o painel. O texto tecnico
+    continua no log; aqui vai o que a pessoa consegue fazer a respeito.
+    """
+    if isinstance(exc, EspacoCombinatorioEsgotado):
+        return (
+            "As combinações possíveis para estes produtos acabaram por enquanto — "
+            "o sorteio evita repetir as 30 últimas. Some valores novos em "
+            "Parâmetros (um cenário a mais já multiplica o total) ou gere menos "
+            "vídeos hoje."
+        )
+    if isinstance(exc, ValueError) and "nenhum produto ativo" in str(exc):
+        return (
+            "Nenhum produto está com o status Ativo. Abra o Catálogo e ative pelo "
+            "menos um produto antes de gerar o briefing."
+        )
+    if isinstance(exc, mod_blocos.ErroBlocos):
+        return f"A matriz de blocos está com um problema e o sorteio não pode rodar: {exc}"
+    if isinstance(exc, ErroCatalogo):
+        return (
+            f"Não consegui falar com o banco de dados: {exc}. Se persistir, saia e "
+            "entre de novo — costuma ser a sessão expirada."
+        )
+    return str(exc)
+
+
+def _para_campo_numerico(bruto: str) -> str:
+    """O valor de volta ao formulario, no formato que o <input type=number> aceita."""
+    try:
+        return f"{_numero(bruto):g}"
+    except ValueError:
+        return bruto
+
+
+def _contagem(quantos: int, singular: str, plural: str) -> str:
+    return f"{quantos} {singular if quantos == 1 else plural}."
+
+
+def _numero(bruto: str) -> float:
+    """Aceita "89,90" e "89.90". Vazio vira zero.
+
+    Virgula decimal e o padrao brasileiro: recusar "89,90" era o erro mais
+    comum do cadastro, e o mais irritante, porque a virgula esta certa. Quando
+    ha virgula, o ponto so pode ser separador de milhar ("1.234,56").
+    """
+    texto = (bruto or "").strip()
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    return float(texto or 0)
 
 
 # ------------------------------------------------------- opcoes dos campos fixos
@@ -276,6 +354,28 @@ def erro_de_dados(request: Request, exc: ErroCatalogo):
     )
 
 
+@app.exception_handler(RequestValidationError)
+def erro_de_formulario(request: Request, exc: RequestValidationError):
+    """Formulario incompleto vira pagina, nao o JSON de validacao do FastAPI.
+
+    So acontece quando algo envia menos campos que o formulario da tela — um
+    atalho antigo, uma extensao do navegador. O padrao do FastAPI responderia
+    `{"detail":[{"type":"missing",...}]}` na cara de quem usa o painel.
+    """
+    faltando = ", ".join(
+        str(parte)
+        for erro in exc.errors()
+        for parte in erro.get("loc", ())[1:]
+    )
+    return _pagina_de_erro(
+        request,
+        "Faltou preencher alguma coisa",
+        f"O formulário chegou incompleto: {faltando or 'campo desconhecido'}.",
+        "Volte à tela anterior e envie o formulário de novo, preenchendo todos "
+        "os campos obrigatórios.",
+    )
+
+
 @app.exception_handler(Exception)
 def erro_inesperado(request: Request, exc: Exception):
     """Ultimo recurso: mostrar a causa em vez de "Internal Server Error".
@@ -385,9 +485,9 @@ def logout():
 
 def _senha_fraca(nova: str, repetida: str) -> str | None:
     if nova != repetida:
-        return "as duas senhas nao sao iguais"
+        return "As duas senhas digitadas não são iguais."
     if len(nova) < MINIMO_SENHA:
-        return f"a senha precisa de pelo menos {MINIMO_SENHA} caracteres"
+        return f"A senha precisa ter pelo menos {MINIMO_SENHA} caracteres."
     return None
 
 
@@ -437,7 +537,9 @@ def aplicar_redefinicao(
     if problema:
         return recusar(problema)
     if not acesso:
-        return recusar("link invalido — abra o do e-mail de novo")
+        return recusar(
+            "Este link não é válido. Abra o link direto do e-mail de recuperação."
+        )
 
     try:
         sessao = auth.redefinir_com_token(acesso, refresh, senha)
@@ -505,6 +607,7 @@ def briefing_de_hoje(request: Request, data: str | None = None):
         ativos=[p for p in produtos.values() if p.status == "ativo"],
         qtds=QTDS_BRIEFING,
         erro=request.query_params.get("erro"),
+        ok=request.query_params.get("ok"),
     )
 
 
@@ -545,9 +648,10 @@ async def gerar_briefing(request: Request, qtd: int = Form(5)):
     dia = date.today().isoformat()
 
     if any(v.data == dia for v in catalogo.videos()):
-        return RedirectResponse(
-            "/?erro=Ja+existe+briefing+para+hoje.+Use+refazer+para+sortear+de+novo.",
-            status_code=303,
+        return _ir_para(
+            "/",
+            erro="O briefing de hoje já foi gerado. Para sortear outras "
+                 'combinações, use "Refazer os de hoje".',
         )
 
     try:
@@ -558,9 +662,9 @@ async def gerar_briefing(request: Request, qtd: int = Form(5)):
         registros = await _redigir(catalogo, matriz, produtos, dia)
         catalogo.registrar(registros)
     except ERROS_DE_GERACAO as exc:
-        return RedirectResponse(f"/?erro={exc}", status_code=303)
+        return _ir_para("/", erro=_explicar(exc))
 
-    return RedirectResponse("/", status_code=303)
+    return _ir_para("/", ok=_contagem(len(registros), "vídeo pronto", "vídeos prontos"))
 
 
 @app.post("/briefing/refazer")
@@ -579,8 +683,10 @@ async def refazer_briefing(request: Request):
             v for v in catalogo.videos() if v.data == dia and v.status == "briefado"
         ]
         if not descartaveis:
-            return RedirectResponse(
-                "/?erro=Nao+ha+briefado+de+hoje+para+refazer.", status_code=303
+            return _ir_para(
+                "/",
+                erro="Não há vídeo pendente de hoje para refazer. Só dá para "
+                     "sortear de novo o que ainda não foi gerado no Flow.",
             )
 
         # Guardado antes de apagar: e o que garante combinacao diferente agora.
@@ -594,9 +700,11 @@ async def refazer_briefing(request: Request):
         registros = await _redigir(catalogo, matriz, produtos, dia, excluir=descartados)
         catalogo.registrar(registros)
     except ERROS_DE_GERACAO as exc:
-        return RedirectResponse(f"/?erro={exc}", status_code=303)
+        return _ir_para("/", erro=_explicar(exc))
 
-    return RedirectResponse("/", status_code=303)
+    return _ir_para(
+        "/", ok=_contagem(len(registros), "vídeo sorteado de novo", "vídeos sorteados de novo")
+    )
 
 
 @app.post("/briefing/produto")
@@ -608,20 +716,24 @@ async def gerar_para_produto(request: Request, sku: str = Form(...)):
     try:
         produto = catalogo.buscar_produto(sku.strip())
         if produto is None:
-            return RedirectResponse(f"/?erro=SKU+nao+encontrado:+{sku}", status_code=303)
+            return _ir_para(
+                "/", erro=f"Não encontrei o produto {sku} no catálogo."
+            )
         if produto.status != "ativo":
-            return RedirectResponse(
-                f"/?erro={produto.sku}+esta+{produto.status};+ative+antes+de+gerar",
-                status_code=303,
+            rotulo = ROTULO_STATUS_PRODUTO.get(produto.status, (produto.status, ""))[0]
+            return _ir_para(
+                "/",
+                erro=f"{produto.nome} está como “{rotulo}”. Mude o status para "
+                     "Ativo no catálogo antes de gerar um vídeo.",
             )
 
         matriz, _ = matriz_de(catalogo)
         registros = await _redigir(catalogo, matriz, [produto], dia)
         catalogo.registrar(registros)
     except ERROS_DE_GERACAO as exc:
-        return RedirectResponse(f"/?erro={exc}", status_code=303)
+        return _ir_para("/", erro=_explicar(exc))
 
-    return RedirectResponse("/", status_code=303)
+    return _ir_para("/", ok=f"Vídeo avulso criado para {produto.nome}.")
 
 
 @app.post("/briefing/descartar")
@@ -632,15 +744,17 @@ def descartar_video(request: Request, video_id: str = Form(...)):
     try:
         registro = catalogo.buscar(video_id)
         if registro.status != "briefado":
-            return RedirectResponse(
-                f"/?erro=Video+{video_id}+esta+{registro.status};+so+briefado+pode+ser+descartado",
-                status_code=303,
+            rotulo = ROTULO_STATUS_VIDEO.get(registro.status, (registro.status, ""))[0]
+            return _ir_para(
+                "/",
+                erro=f"Este vídeo já está como “{rotulo}” — o clipe existe fora do "
+                     "painel. Só dá para descartar o que ainda não foi gerado.",
             )
         catalogo.remover_videos([video_id])
     except ErroCatalogo as exc:
-        return RedirectResponse(f"/?erro={exc}", status_code=303)
+        return _ir_para("/", erro=_explicar(exc))
 
-    return RedirectResponse("/", status_code=303)
+    return _ir_para("/", ok="Vídeo descartado. A combinação volta a poder ser sorteada.")
 
 
 # ------------------------------------------------------------------ catalogo
@@ -653,6 +767,8 @@ def listar_catalogo(request: Request):
         "catalogo.html",
         produtos=catalogo.produtos(),
         contagens=catalogo.contagem_por_sku(),
+        erro=request.query_params.get("erro"),
+        ok=request.query_params.get("ok"),
     )
 
 
@@ -666,7 +782,8 @@ def form_editar_produto(request: Request, sku: str):
     catalogo = catalogo_de(request)
     produto = catalogo.buscar_produto(sku)
     if produto is None:
-        return RedirectResponse("/catalogo", status_code=303)
+        # Redirecionar calado fazia a pessoa achar que tinha clicado errado.
+        return _ir_para("/catalogo", erro=f"Não encontrei o produto {sku} no catálogo.")
 
     return _form_produto(request, campos_de(produto), existente=True, erro=None)
 
@@ -699,7 +816,12 @@ def salvar_produto(
             request,
             {
                 "sku": sku.strip(), "nome": nome.strip(), "categoria": escolhida,
-                "preco": preco, "margem": margem, "link_shop": link_shop.strip(),
+                # Normalizado: "89,90" num <input type=number> e valor invalido,
+                # e o navegador apaga o campo em vez de mostrar o que a pessoa
+                # digitou. Vira "89.9" e sobrevive ao erro de outro campo.
+                "preco": _para_campo_numerico(preco),
+                "margem": _para_campo_numerico(margem),
+                "link_shop": link_shop.strip(),
                 "pasta_drive": pasta_drive.strip(), "angulos": lista_angulos,
                 "status": status,
             },
@@ -708,32 +830,45 @@ def salvar_produto(
         )
 
     if status not in STATUS_PRODUTO:
-        return recusar(f"status invalido: {status}")
+        return recusar(f"Status inválido: {status}.")
     if not sku.strip() or not nome.strip() or not escolhida:
-        return recusar("SKU, nome e categoria sao obrigatorios")
+        return recusar("Preencha SKU, nome e categoria — são os três obrigatórios.")
+
+    # Salvar e upsert pelo SKU: sem esta checagem, cadastrar um produto novo com
+    # SKU ja usado sobrescrevia o antigo em silencio, e nada avisava que um
+    # produto do catalogo tinha acabado de virar outro.
+    if not existente and catalogo.buscar_produto(sku.strip()) is not None:
+        return recusar(
+            f"Já existe um produto com o SKU {sku.strip()}. Abra-o no catálogo "
+            "para editar, ou use outro código."
+        )
 
     try:
         produto = Produto(
             sku=sku.strip(),
             nome=nome.strip(),
             categoria=escolhida,
-            preco=float(preco or 0),
+            preco=_numero(preco),
             # O formulario manda porcentagem; o modelo guarda fracao.
-            margem=float(margem or 0) / 100,
+            margem=_numero(margem) / 100,
             link_shop=link_shop.strip(),
             pasta_drive=pasta_drive.strip(),
             angulos=lista_angulos,
             status=status,
         )
     except ValueError:
-        return recusar("preco e margem precisam ser numeros (use ponto decimal)")
+        return recusar(
+            "Preço e margem precisam ser números. Escreva só os dígitos, "
+            "com vírgula ou ponto nos centavos — por exemplo 89,90."
+        )
 
     try:
         catalogo.salvar_produto(produto)
     except ErroCatalogo as exc:
-        return recusar(str(exc))
+        return recusar(_explicar(exc))
 
-    return RedirectResponse("/catalogo", status_code=303)
+    acao = "atualizado" if existente else "cadastrado"
+    return _ir_para("/catalogo", ok=f"Produto {produto.sku} {acao}.")
 
 
 @app.get("/blocos", response_class=HTMLResponse)
@@ -754,6 +889,24 @@ def ver_blocos(request: Request):
 
 @app.get("/parametros", response_class=HTMLResponse)
 def ver_parametros(request: Request):
+    return _pagina_parametros(
+        request,
+        campos=CAMPOS_PARAMETRO_VAZIOS,
+        erro=request.query_params.get("erro"),
+        ok=request.query_params.get("ok"),
+    )
+
+
+# O formulario volta com o que foi digitado quando a validacao recusa. Antes
+# qualquer erro redirecionava e apagava tudo — inclusive o descritor em ingles,
+# que e o campo mais demorado de escrever da tela.
+CAMPOS_PARAMETRO_VAZIOS = {
+    "tipo": "eixo", "eixo": "", "texto": "", "en": "", "descricao": "", "categorias": [],
+}
+
+
+def _pagina_parametros(request: Request, campos: dict, erro: str | None = None,
+                       ok: str | None = None, status_code: int = 200) -> HTMLResponse:
     catalogo = catalogo_de(request)
     parametros, aviso = parametros_seguros(catalogo)
     try:
@@ -761,7 +914,7 @@ def ver_parametros(request: Request):
     except (mod_blocos.ErroBlocos, OSError):
         matriz = None
 
-    return _pagina(
+    resposta = _pagina(
         request,
         "parametros.html",
         parametros=parametros,
@@ -775,11 +928,15 @@ def ver_parametros(request: Request):
             eixo: matriz.eixos[eixo][0] for eixo in EIXOS
         } if matriz else {},
         categorias=opcoes_de_categoria(catalogo, parametros),
-        erro=request.query_params.get("erro"),
+        campos=campos,
+        erro=erro,
+        ok=ok,
     )
+    resposta.status_code = status_code
+    return resposta
 
 
-@app.post("/parametros")
+@app.post("/parametros", response_class=HTMLResponse)
 def criar_parametro(
     request: Request,
     tipo: str = Form(...),
@@ -790,27 +947,38 @@ def criar_parametro(
     categorias: list[str] = Form(default=[]),
 ):
     catalogo = catalogo_de(request)
+    texto = texto.strip()
+    eixo = eixo.strip() if tipo == "eixo" else ""
 
     def recusar(mensagem: str):
-        return RedirectResponse(f"/parametros?erro={mensagem}", status_code=303)
+        """Devolve o formulario preenchido, nao a tela em branco."""
+        return _pagina_parametros(
+            request,
+            campos={
+                "tipo": tipo, "eixo": eixo, "texto": texto, "en": en.strip(),
+                "descricao": descricao.strip(), "categorias": list(categorias),
+            },
+            erro=mensagem,
+        )
 
     if tipo not in TIPOS_PARAMETRO:
-        return recusar(f"tipo invalido: {tipo}")
+        return recusar(f"Tipo inválido: {tipo}.")
 
-    texto = texto.strip()
     if not texto:
-        return recusar("o texto e obrigatorio")
+        return recusar("Escreva o texto em português — é o nome que aparece no painel.")
 
-    eixo = eixo.strip() if tipo == "eixo" else ""
     if tipo == "eixo":
         if eixo not in EIXOS:
-            return recusar(f"eixo invalido: {eixo}")
+            return recusar(f"Eixo inválido: {eixo}.")
         if not en.strip():
-            return recusar("o descritor em ingles e obrigatorio para valor de eixo")
+            return recusar(
+                "A descrição da cena em inglês é obrigatória: é ela que o Veo "
+                "usa para montar as imagens do vídeo."
+            )
 
     chave = mod_blocos.chave_de(texto)
     if not chave:
-        return recusar("o texto precisa ter letras ou numeros")
+        return recusar("O texto precisa ter pelo menos uma letra ou número.")
 
     try:
         catalogo.salvar_parametro(
@@ -826,9 +994,9 @@ def criar_parametro(
             )
         )
     except ErroCatalogo as exc:
-        return recusar(str(exc))
+        return recusar(_explicar(exc))
 
-    return RedirectResponse("/parametros", status_code=303)
+    return _ir_para("/parametros", ok=f"“{texto}” entrou no sorteio.")
 
 
 @app.post("/parametros/remover")
@@ -844,6 +1012,6 @@ def remover_parametro(
     try:
         catalogo.remover_parametro(tipo, eixo, chave)
     except ErroCatalogo as exc:
-        return RedirectResponse(f"/parametros?erro={exc}", status_code=303)
+        return _ir_para("/parametros", erro=_explicar(exc))
 
-    return RedirectResponse("/parametros", status_code=303)
+    return _ir_para("/parametros", ok="Valor removido. Ele não será mais sorteado.")

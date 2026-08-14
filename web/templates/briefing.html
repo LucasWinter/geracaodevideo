@@ -1,132 +1,188 @@
 {% extends "base.html" %}
-{% block titulo %}Briefing {{ dia }}{% endblock %}
+{% block titulo %}Briefing de {{ dia }}{% endblock %}
 
 {% block conteudo %}
 <div class="cabecalho">
-  <h1>Briefing <span class="dia">{{ dia }}</span></h1>
-  {% if dia == hoje and not videos %}
-  <form method="post" action="/briefing" class="gerar">
-    <label for="qtd">quantos vídeos</label>
-    <select id="qtd" name="qtd">
-      {% for opcao in qtds %}
-      <option value="{{ opcao }}" {% if opcao == 5 %}selected{% endif %}>{{ opcao }}</option>
-      {% endfor %}
-    </select>
-    <button class="primario" data-aguardando="gerando…">Gerar briefing de hoje</button>
-  </form>
-  {% endif %}
+  <h1>
+    Briefing
+    <span class="dia">{% if dia == hoje %}de hoje, {% endif %}{{ dia }}</span>
+  </h1>
 </div>
 
 {% if dia == hoje %}
 {% set descartaveis = videos|selectattr('status', 'equalto', 'briefado')|list %}
-<div class="acoes-dia">
-  <form method="post" action="/briefing/produto" class="gerar">
-    <label for="sku">gerar um vídeo avulso para</label>
-    <select id="sku" name="sku" required>
-      <option value="" selected disabled>escolha o produto…</option>
-      {% for produto in ativos %}
-      <option value="{{ produto.sku }}">{{ produto.sku }} — {{ produto.nome }}</option>
-      {% endfor %}
-    </select>
-    <button data-aguardando="gerando…">Gerar</button>
-  </form>
 
-  {% if descartaveis %}
-  <form method="post" action="/briefing/refazer" class="gerar"
-        data-confirmar="Refazer descarta {{ descartaveis|length }} vídeo(s) ainda em briefado e sorteia outros no lugar. Os descartados somem do histórico. Continuar?">
-    <button data-aguardando="refazendo…">Refazer os {{ descartaveis|length }} de hoje</button>
-  </form>
+<section class="painel-acoes" aria-label="Ações do dia">
+  {% if not ativos %}
+    <p class="vazio">
+      Nenhum produto está ativo, então não há o que sortear.
+      <a href="/produto/novo">Cadastre um produto</a> ou ative um dos que já existem
+      no <a href="/catalogo">catálogo</a>.
+    </p>
+  {% elif not videos %}
+    <form method="post" action="/briefing" class="gerar destaque-acao">
+      <label for="qtd">Quantos vídeos você quer hoje?</label>
+      <select id="qtd" name="qtd">
+        {% for opcao in qtds %}
+        <option value="{{ opcao }}" {% if opcao == 5 %}selected{% endif %}>{{ opcao }} vídeo{{ 's' if opcao != 1 }}</option>
+        {% endfor %}
+      </select>
+      <button class="primario" data-aguardando="gerando, aguarde…">Gerar briefing de hoje</button>
+      <p class="nota larga">
+        Leva alguns segundos: cada vídeo tem cenário, câmera e luz sorteados, e o
+        texto é escrito na hora. O sorteio nunca repete as 30 últimas combinações.
+      </p>
+    </form>
+  {% else %}
+    <p class="nota larga">
+      O briefing de hoje já está pronto abaixo. Você ainda pode gerar um vídeo
+      extra para um produto específico ou sortear tudo de novo.
+    </p>
   {% endif %}
-</div>
+
+  {% if ativos %}
+  <div class="acoes-secundarias">
+    <form method="post" action="/briefing/produto" class="gerar">
+      <label for="sku">Vídeo extra para um produto</label>
+      <select id="sku" name="sku" required>
+        <option value="" selected disabled>escolha o produto…</option>
+        {% for produto in ativos %}
+        <option value="{{ produto.sku }}">{{ produto.nome }} ({{ produto.sku }})</option>
+        {% endfor %}
+      </select>
+      <button data-aguardando="gerando…">Gerar vídeo extra</button>
+    </form>
+
+    {% if descartaveis %}
+    <form method="post" action="/briefing/refazer" class="gerar"
+          data-confirmar="Isto descarta {{ descartaveis|length }} vídeo(s) que ainda não foram gerados no Flow e sorteia outros no lugar. Os textos atuais são perdidos. Continuar?">
+      <button data-aguardando="sorteando de novo…">Refazer os {{ descartaveis|length }} de hoje</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
 {% endif %}
 
-<nav class="dias" aria-label="Navegar por dia">
-  <a href="/?data={{ dia_anterior }}" rel="prev" aria-label="Dia anterior">
+<nav class="dias" aria-label="Ver outro dia">
+  <a href="/?data={{ dia_anterior }}" rel="prev" aria-label="Ver o dia anterior">
     ‹<span class="rotulo-dia"> dia anterior</span>
   </a>
   <form method="get" action="/">
-    <label for="data" class="oculto-visual">Ver outro dia</label>
-    <input type="date" id="data" name="data" value="{{ dia }}" max="{{ dia_seguinte }}">
-    <button>ver</button>
+    <label for="data" class="oculto-visual">Escolher a data do briefing</label>
+    <input type="date" id="data" name="data" value="{{ dia }}" max="{{ hoje }}">
+    <button>Ver</button>
   </form>
-  <a href="/?data={{ dia_seguinte }}" rel="next" aria-label="Dia seguinte">
+  {# So ate hoje: o briefing e sempre do dia, entao dia futuro seria sempre uma
+     pagina vazia — e com `max` no seletor, um beco sem volta pelo teclado. #}
+  {% if dia < hoje %}
+  <a href="/?data={{ dia_seguinte }}" rel="next" aria-label="Ver o dia seguinte">
     <span class="rotulo-dia">dia seguinte </span>›
   </a>
-  {% if dia != hoje %}<a href="/" class="voltar-hoje">hoje</a>{% endif %}
+  {% endif %}
+  {% if dia != hoje %}<a href="/" class="voltar-hoje">Voltar para hoje</a>{% endif %}
 </nav>
-
-{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
 
 {% if not videos %}
   <p class="vazio">
-    {% if dia == hoje %}
-      Nenhum vídeo para hoje. Gere o briefing acima — o sorteio evita as
-      últimas 30 combinações, então nada repete.
+    {% if dia == hoje and ativos %}
+      Nenhum vídeo para hoje ainda. Use o botão acima para gerar o briefing do dia.
+    {% elif dia == hoje %}
+      {# Sem produto ativo nao ha botao nenhum acima: mandar usa-lo seria mentira. #}
+      Nenhum vídeo para hoje. Assim que houver um produto ativo no catálogo,
+      o botão de gerar o briefing aparece aqui.
     {% else %}
-      Nenhum vídeo em {{ dia }}. O briefing só é gerado para o dia de hoje;
-      use as setas para procurar em outra data.
+      Nenhum vídeo em {{ dia }}. O briefing é sempre gerado no próprio dia —
+      use as setas acima para procurar em outra data.
     {% endif %}
   </p>
 {% else %}
-  <p class="resumo">{{ videos|length }} vídeo{{ 's' if videos|length != 1 }} neste dia.</p>
+  <div class="cabecalho">
+    <h2 class="titulo-lista">
+      {{ videos|length }} vídeo{{ 's' if videos|length != 1 }} neste dia
+    </h2>
+  </div>
+  <p class="nota">
+    Para cada vídeo abaixo: monte o frame inicial no Nano Banana com a foto real
+    do produto, copie o prompt no Flow, gere o vídeo e salve o arquivo com o nome
+    indicado no cartão.
+  </p>
 {% endif %}
 
 {% for video in videos %}
 {% set produto = produtos.get(video.sku) %}
+{% set rotulo, explicacao = rotulo_status_video.get(video.status, (video.status, '')) %}
 <article class="card">
   <header>
     <h2>{{ produto.nome if produto else video.sku }}</h2>
-    <span class="etiqueta">{{ video.sku }}</span>
-    <span class="etiqueta status-{{ video.status }}">{{ video.status }}</span>
-    <span class="etiqueta hash">{{ video.combinacao_hash }}</span>
+    <span class="etiqueta" title="Código do produto no seu catálogo">{{ video.sku }}</span>
+    <span class="etiqueta status-{{ video.status }}" title="{{ explicacao }}">{{ rotulo }}</span>
     {% if video.status == 'briefado' and dia == hoje %}
     <form method="post" action="/briefing/descartar" class="descartar"
-          data-confirmar="Descartar este vídeo? Ele sai do histórico, então a combinação volta a poder ser sorteada.">
+          data-confirmar="Descartar este vídeo? O texto é perdido e a combinação volta a poder ser sorteada.">
       <input type="hidden" name="video_id" value="{{ video.id }}">
-      <button data-aguardando="…">descartar</button>
+      <button data-aguardando="descartando…"
+              aria-label="Descartar o vídeo de {{ produto.nome if produto else video.sku }}">Descartar</button>
     </form>
     {% endif %}
   </header>
 
+  {% if (produto and produto.pasta_drive) or (produto and produto.link_shop) %}
   <ul class="meta">
     {% if produto and produto.pasta_drive %}
-    <li><a href="{{ produto.pasta_drive }}" target="_blank" rel="noopener">Fotos do produto ↗</a></li>
+    <li><a href="{{ produto.pasta_drive }}" target="_blank" rel="noopener">Fotos do produto (abre em nova aba) ↗</a></li>
     {% endif %}
     {# A legenda diz "link do produto na vitrine" — o link precisa estar a mao. #}
     {% if produto and produto.link_shop %}
-    <li><a href="{{ produto.link_shop }}" target="_blank" rel="noopener">Link do Shop ↗</a></li>
+    <li><a href="{{ produto.link_shop }}" target="_blank" rel="noopener">Página do produto no Shop (abre em nova aba) ↗</a></li>
     {% endif %}
-    <li>Salvar como <code>{{ video.arquivo }}</code></li>
   </ul>
+  {% endif %}
 
   <div class="bloco">
     <div class="bloco-topo">
-      <span>Prompt (Flow / Veo)</span>
-      <button type="button" data-copiar="prompt-{{ video.id }}" aria-live="polite">copiar</button>
+      <span class="passo"><span class="numero">1</span> Prompt — cole no Flow</span>
+      <button type="button" data-copiar="prompt-{{ video.id }}" data-nome="Prompt"
+              aria-label="Copiar o prompt de {{ produto.nome if produto else video.sku }}">Copiar</button>
     </div>
     <pre id="prompt-{{ video.id }}">{{ video.prompt }}</pre>
   </div>
 
   <div class="bloco">
     <div class="bloco-topo">
-      <span>Gancho na tela</span>
-      <button type="button" data-copiar="gancho-{{ video.id }}" aria-live="polite">copiar</button>
+      <span class="passo"><span class="numero">2</span> Gancho — texto que aparece na tela</span>
+      <button type="button" data-copiar="gancho-{{ video.id }}" data-nome="Gancho"
+              aria-label="Copiar o gancho de {{ produto.nome if produto else video.sku }}">Copiar</button>
     </div>
     <pre id="gancho-{{ video.id }}">{{ video.gancho }}</pre>
   </div>
 
   <div class="bloco">
     <div class="bloco-topo">
-      <span>Legenda + hashtags</span>
-      <button type="button" data-copiar="legenda-{{ video.id }}" aria-live="polite">copiar</button>
+      <span class="passo"><span class="numero">3</span> Legenda — cole ao postar no TikTok</span>
+      <button type="button" data-copiar="legenda-{{ video.id }}" data-nome="Legenda"
+              aria-label="Copiar a legenda de {{ produto.nome if produto else video.sku }}">Copiar</button>
     </div>
     <pre id="legenda-{{ video.id }}">{{ video.legenda }}
 
 {{ video.hashtags }}</pre>
   </div>
 
+  <div class="bloco">
+    <div class="bloco-topo">
+      <span class="passo"><span class="numero">4</span> Salve o arquivo com este nome</span>
+      <button type="button" data-copiar="arquivo-{{ video.id }}" data-nome="Nome do arquivo"
+              aria-label="Copiar o nome do arquivo de {{ produto.nome if produto else video.sku }}">Copiar</button>
+    </div>
+    <pre id="arquivo-{{ video.id }}">{{ video.arquivo }}</pre>
+  </div>
+
   <details>
-    <summary>Blocos sorteados</summary>
+    <summary>Detalhes técnicos deste vídeo</summary>
+    <p class="nota">
+      Combinação sorteada. O código <code>{{ video.combinacao_hash }}</code> é a
+      identidade dela — é por ele que o sorteio evita repetir.
+    </p>
     <pre class="discreto">{{ video.blocos_json }}</pre>
   </details>
 </article>
@@ -134,9 +190,11 @@
 
 {% if videos %}
 <p class="rodape">
-  Depois de baixar os clipes do Flow para <code>entrada/</code> com o nome
-  indicado, rode no terminal: <code>gdv status &lt;id&gt; gerado</code> e
-  <code>gdv montar</code>. A montagem é local — ffmpeg não roda no site.
+  <strong>Depois de gerar os vídeos:</strong> salve os clipes na pasta
+  <code>entrada/</code> com o nome indicado em cada cartão e, no computador onde o
+  gdv está instalado, rode <code>gdv status &lt;id&gt; gerado</code> e
+  <code>gdv montar</code>. A montagem final é feita no seu computador — ela não
+  roda aqui no site.
 </p>
 {% endif %}
 {% endblock %}

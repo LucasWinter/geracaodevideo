@@ -3,21 +3,19 @@
 
 {% block conteudo %}
 <div class="cabecalho">
-  <h1>Trocar senha</h1>
-  <a href="/" class="botao">Voltar</a>
+  <h1>Trocar minha senha</h1>
+  <a href="/" class="botao">Voltar ao briefing</a>
 </div>
 
-{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
-
 {% if trocada %}
-  <p class="aviso" role="status">
-    Senha trocada. Ela já vale para o próximo login — a sessão atual continua
-    aberta.
+  <p class="sucesso" role="status">
+    Senha trocada com sucesso. Use a nova da próxima vez que entrar — esta
+    sessão continua aberta normalmente.
   </p>
 {% else %}
   <p class="vazio">
-    Se você entrou com a senha padrão que o administrador criou, troque agora.
-    Ela é a mesma para todo mundo do time até cada um mudar a sua.
+    Se você entrou com a senha padrão criada por quem administra o painel, troque
+    agora: ela é a mesma para todo o time até cada um definir a sua.
   </p>
 {% endif %}
 
@@ -32,6 +30,7 @@
     Repita a nova senha
     <input name="senha2" type="password" autocomplete="new-password"
            minlength="8" required>
+    <small>As duas precisam ser iguais.</small>
   </label>
   <button class="primario" data-aguardando="salvando…">Salvar senha</button>
 </form>
