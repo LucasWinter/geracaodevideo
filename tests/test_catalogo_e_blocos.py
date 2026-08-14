@@ -5,7 +5,7 @@ import yaml
 
 from gdv import blocos as mod_blocos
 from gdv.catalogo import Catalogo, ErroCatalogo
-from gdv.modelos import EIXOS, RegistroVideo
+from gdv.modelos import EIXOS, Parametro, RegistroVideo
 
 
 def _registro(id_: str, hash_: str, status: str = "briefado") -> RegistroVideo:
@@ -141,3 +141,84 @@ def test_categorias_vazias_quando_nenhum_bloco_restringe(tmp_path, dados):
     alvo.write_text(yaml.safe_dump(conteudo, allow_unicode=True), encoding="utf-8")
 
     assert mod_blocos.carregar(alvo).categorias() == ()
+
+
+# ------------------------------------------------------------- parametros
+
+def _parametro(**kwargs) -> Parametro:
+    base = dict(tipo="eixo", eixo="cenario", chave="varanda", texto="varanda", en="balcony")
+    return Parametro(**{**base, **kwargs})
+
+
+def test_mesclar_soma_valor_ao_eixo(dados):
+    matriz = mod_blocos.carregar(dados / "blocos.yaml")
+    antes = len(matriz.eixos["cenario"])
+
+    mesclada = mod_blocos.mesclar(matriz, [_parametro()])
+
+    assert len(mesclada.eixos["cenario"]) == antes + 1
+    assert mesclada.eixos["cenario"][-1].id == "varanda"
+    assert mesclada.eixos["cenario"][-1].en == "balcony"
+
+
+def test_mesclar_multiplica_o_espaco_combinatorio(dados):
+    """E o efeito que importa: um valor a mais nao soma, multiplica."""
+    matriz = mod_blocos.carregar(dados / "blocos.yaml")
+    espaco = matriz.espaco("bolsas")
+
+    mesclada = mod_blocos.mesclar(matriz, [_parametro()])
+
+    assert mesclada.espaco("bolsas") > espaco
+
+
+def test_yaml_ganha_de_parametro_com_id_repetido(dados):
+    """O YAML e revisado no repositorio; a tabela qualquer um edita."""
+    matriz = mod_blocos.carregar(dados / "blocos.yaml")
+    existente = matriz.eixos["cenario"][0]
+
+    mesclada = mod_blocos.mesclar(
+        matriz, [_parametro(chave=existente.id, texto="outro", en="other")]
+    )
+
+    valores = [v for v in mesclada.eixos["cenario"] if v.id == existente.id]
+    assert len(valores) == 1
+    assert valores[0].texto == existente.texto
+
+
+def test_mesclar_ignora_eixo_desconhecido(dados):
+    """Eixo removido do codigo nao pode derrubar a geracao do dia."""
+    matriz = mod_blocos.carregar(dados / "blocos.yaml")
+
+    mesclada = mod_blocos.mesclar(matriz, [_parametro(eixo="eixo_que_nao_existe")])
+
+    assert set(mesclada.eixos) == set(matriz.eixos)
+
+
+def test_mesclar_ignora_parametro_que_nao_e_de_eixo(dados):
+    matriz = mod_blocos.carregar(dados / "blocos.yaml")
+
+    mesclada = mod_blocos.mesclar(
+        matriz, [_parametro(tipo="categoria", eixo="", chave="petshop", texto="petshop")]
+    )
+
+    assert mesclada.eixos == matriz.eixos
+
+
+def test_mesclar_sem_ingles_cai_para_o_portugues(dados):
+    """Prompt pior que o ideal ainda e melhor que valor vazio no sorteio."""
+    matriz = mod_blocos.carregar(dados / "blocos.yaml")
+
+    mesclada = mod_blocos.mesclar(matriz, [_parametro(en="")])
+
+    assert mesclada.eixos["cenario"][-1].en == "varanda"
+
+
+def test_chave_derivada_e_estavel_e_sem_acento():
+    assert mod_blocos.chave_de("Varanda ao Entardecer") == "varanda_ao_entardecer"
+    assert mod_blocos.chave_de("café — luz de manhã") == "cafe_luz_de_manha"
+    assert mod_blocos.chave_de("!!!") == ""
+
+
+def test_catalogo_csv_nao_tem_parametros(catalogo):
+    """No modo offline a matriz e exatamente o blocos.yaml."""
+    assert catalogo.parametros() == []

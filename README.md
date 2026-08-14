@@ -105,6 +105,56 @@ janela anti-repetição de um não enxerga o que o outro gerou.
 Três telas: **Briefing** (gerar o dia e copiar os prompts), **Catálogo** (cadastrar produtos) e
 **Matriz** (ver os blocos, só leitura).
 
+### Senha
+
+Duas telas, para dois casos diferentes:
+
+- **`/senha`** — troca a senha de quem já está logado. É o caminho do time: o admin cria a conta com
+  uma senha padrão, a pessoa entra e troca. **Não depende de e-mail**, então funciona sempre.
+- **`/recuperar`** — envia o link de redefinição pelo Supabase, para quem esqueceu a senha. O link cai
+  em `/redefinir`, que lê o token do **fragmento** da URL (`#access_token=…`) via JS, porque fragmento
+  não é enviado ao servidor.
+
+A tela de recuperação **sempre responde a mesma coisa**, exista o e-mail ou não. Isso é deliberado:
+uma mensagem do tipo "esse e-mail não está cadastrado" transformaria a página num verificador de quem
+tem conta na empresa. O "só serve para usuário da base" é garantido pelo servidor — o Supabase só
+envia para quem existe — não pela mensagem na tela.
+
+Dois ajustes no painel do Supabase, sem os quais o link do e-mail não funciona:
+
+1. **Authentication → URL Configuration** — `Site URL` e `Redirect URLs` precisam incluir
+   `https://<seu-dominio>/redefinir`. Sem isso o Supabase recusa o redirecionamento.
+2. **Authentication → Emails** — o SMTP embutido do plano gratuito é para teste e limita a poucos
+   e-mails por hora. Para um time pequeno costuma bastar; se o link parar de chegar, é esse limite.
+   A saída é configurar um SMTP próprio, ou simplesmente usar `/senha`, que não manda e-mail nenhum.
+
+### A aba Parâmetros
+
+O `data/blocos.yaml` continua sendo a base versionada. A tabela `parametros` no Supabase soma valores
+a ela, e a aba **Parâmetros** é onde o time acrescenta sem editar arquivo nem refazer deploy. Três
+tipos:
+
+| tipo | onde aparece |
+|---|---|
+| `eixo` | novo valor sorteável num dos seis eixos — multiplica o espaço de combinações |
+| `categoria` | opção no campo Categoria do cadastro de produto |
+| `angulo` | caixa de seleção em "Ângulos que você tem" |
+
+`mesclar()` (em `src/gdv/blocos.py`) é quem soma os dois, e **tanto o site quanto a CLI passam por
+ela**. Se só um dos dois enxergasse os parâmetros novos, `hash_combinacao()` daria valores diferentes
+nos dois lugares e a janela anti-repetição de um deixaria de ver o que o outro gerou.
+
+Regras que valem a pena saber:
+
+- **O YAML ganha em caso de id repetido.** Ele é revisado no repositório; a tabela qualquer um edita.
+- **A chave é derivada do texto e nunca muda.** `"varanda ao entardecer"` vira `varanda_ao_entardecer`
+  e entra no hash igual a um id do YAML. Recriar um valor removido com o mesmo texto gera a mesma
+  chave — a anti-repetição vai reconhecê-lo, não é combinação nova.
+- **Remover só afeta sorteios futuros.** O hash guardado no log é texto, não referência: vídeo antigo
+  continua válido.
+- **Eixo desconhecido é ignorado, não quebra.** Um eixo removido do código não pode derrubar a geração
+  do dia.
+
 ### O formulário de produto
 
 Os campos são agrupados pelo efeito que têm, porque nem todos têm um. Vale saber onde cada um chega:

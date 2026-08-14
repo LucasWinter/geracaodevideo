@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Trocar senha{% endblock %}
+
+{% block conteudo %}
+<div class="cabecalho">
+  <h1>Trocar senha</h1>
+  <a href="/" class="botao">Voltar</a>
+</div>
+
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+{% if trocada %}
+  <p class="aviso" role="status">
+    Senha trocada. Ela já vale para o próximo login — a sessão atual continua
+    aberta.
+  </p>
+{% else %}
+  <p class="vazio">
+    Se você entrou com a senha padrão que o administrador criou, troque agora.
+    Ela é a mesma para todo mundo do time até cada um mudar a sua.
+  </p>
+{% endif %}
+
+<form method="post" action="/senha" class="formulario">
+  <label>
+    Nova senha
+    <input name="senha" type="password" autocomplete="new-password"
+           minlength="8" required>
+    <small>Pelo menos 8 caracteres.</small>
+  </label>
+  <label>
+    Repita a nova senha
+    <input name="senha2" type="password" autocomplete="new-password"
+           minlength="8" required>
+  </label>
+  <button class="primario" data-aguardando="salvando…">Salvar senha</button>
+</form>
+{% endblock %}

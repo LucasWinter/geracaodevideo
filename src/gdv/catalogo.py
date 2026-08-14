@@ -12,7 +12,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-from .modelos import STATUS_VIDEO, Produto, RegistroVideo
+from .modelos import STATUS_VIDEO, Parametro, Produto, RegistroVideo
 
 COLUNAS_PRODUTOS = [
     "sku",
@@ -165,6 +165,16 @@ class Catalogo:
             if registro.id == video_id:
                 return registro
         raise ErroCatalogo(f"video {video_id!r} nao encontrado em {self.caminho_videos}")
+
+    # -------------------------------------------------------------- parametros
+
+    def parametros(self) -> list[Parametro]:
+        """Vazio: parametro e criado pelo painel, que so roda sobre o Supabase.
+
+        Existe para o motor poder chamar `parametros()` sem perguntar qual
+        backend esta ativo. No modo CSV a matriz e exatamente o blocos.yaml.
+        """
+        return []
 
     def _escrever_videos(self, registros: list[RegistroVideo]) -> None:
         self.diretorio.mkdir(parents=True, exist_ok=True)

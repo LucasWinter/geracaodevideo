@@ -80,6 +80,11 @@ eixos:
       en: "light oak kitchen counter with soft shadows"
 
   camera:
+    # Primeiro da lista de proposito: e o enquadramento mais usado em TikTok
+    # Shop, entao fica onde o olho bate primeiro ao conferir a matriz.
+    - id: pov_primeira_pessoa
+      texto: "POV — primeira pessoa"
+      en: "first-person POV, camera at eye level as if seen through the creator's own eyes, their hands entering frame naturally to handle the product"
     - id: macro_push_in
       texto: "macro slow push-in"
       en: "slow macro push-in toward the product"

@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Protocol, runtime_checkable
 
-from .modelos import Produto, RegistroVideo
+from .modelos import Parametro, Produto, RegistroVideo
 
 
 @runtime_checkable
@@ -39,3 +39,11 @@ class ProtocoloCatalogo(Protocol):
     def por_status(self, status: str) -> list[RegistroVideo]: ...
 
     def buscar(self, video_id: str) -> RegistroVideo: ...
+
+    def parametros(self) -> list[Parametro]:
+        """Opcoes criadas pelo painel, somadas as do blocos.yaml.
+
+        So a leitura esta no contrato: escrever parametro, como salvar produto,
+        e coisa do painel e existe apenas no adaptador do Supabase.
+        """
+        ...

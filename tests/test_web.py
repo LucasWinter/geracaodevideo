@@ -477,3 +477,228 @@ def test_matriz_aparece_so_para_leitura(logado):
     assert resposta.status_code == 200
     assert "gancho_pov" in resposta.text
     assert "Só leitura" in resposta.text
+
+
+# ---------------------------------------------------------------- parametros
+
+def test_parametros_exige_sessao(deslogado):
+    assert deslogado.get("/parametros", follow_redirects=False).status_code == 303
+
+
+def test_parametros_abre_vazio(logado):
+    resposta = logado.get("/parametros")
+
+    assert resposta.status_code == 200
+    assert "Nada ainda" in resposta.text
+
+
+def test_valor_de_eixo_criado_entra_no_sorteio(logado, catalogo_web):
+    """O ponto da aba: ampliar a matriz sem editar arquivo nem fazer deploy."""
+    logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "cenario", "texto": "varanda ao entardecer",
+              "en": "apartment balcony at dusk"},
+        follow_redirects=False,
+    )
+
+    assert [p.chave for p in catalogo_web.parametros()] == ["varanda_ao_entardecer"]
+    assert "varanda ao entardecer" in logado.get("/blocos").text
+
+
+def test_valor_criado_aparece_marcado_na_matriz(logado):
+    logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "camera", "texto": "drone baixo", "en": "low drone pass"},
+    )
+
+    html = " ".join(logado.get("/blocos").text.split())
+
+    assert '<code>drone_baixo</code> <span class="etiqueta">painel</span>' in html
+
+
+def test_valor_de_eixo_exige_ingles(logado, catalogo_web):
+    """Sem o `en` o prompt do Veo perde a descricao da cena."""
+    resposta = logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "cenario", "texto": "varanda", "en": "  "},
+        follow_redirects=False,
+    )
+
+    assert "ingles" in resposta.headers["location"]
+    assert catalogo_web.parametros() == []
+
+
+def test_eixo_invalido_e_recusado(logado, catalogo_web):
+    resposta = logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "inventado", "texto": "x", "en": "x"},
+        follow_redirects=False,
+    )
+
+    assert "eixo+invalido" in resposta.headers["location"].replace("%20", "+")
+    assert catalogo_web.parametros() == []
+
+
+def test_texto_sem_letras_nao_gera_chave(logado, catalogo_web):
+    resposta = logado.post(
+        "/parametros",
+        data={"tipo": "categoria", "texto": "!!!"},
+        follow_redirects=False,
+    )
+
+    assert "erro=" in resposta.headers["location"]
+    assert catalogo_web.parametros() == []
+
+
+def test_categoria_criada_aparece_no_formulario_de_produto(logado):
+    logado.post("/parametros", data={"tipo": "categoria", "texto": "papelaria"})
+
+    assert 'value="papelaria"' in logado.get("/produto/novo").text
+
+
+def test_angulo_criado_vira_caixa_de_selecao(logado):
+    logado.post("/parametros", data={"tipo": "angulo", "texto": "dobrado"})
+
+    html = " ".join(logado.get("/produto/novo").text.split())
+
+    assert 'name="angulos" value="dobrado"' in html
+
+
+def test_angulo_criado_e_reconhecido_ao_editar(logado, catalogo_web):
+    """Sem isto o angulo criado cairia no campo livre em vez de marcar a caixa."""
+    logado.post("/parametros", data={"tipo": "angulo", "texto": "dobrado"})
+    catalogo_web.salvar_produto(
+        Produto("ANG-3", "X", "casa", 1.0, 0.1, "", "", ["dobrado"], "ativo")
+    )
+
+    html = " ".join(logado.get("/produto/ANG-3").text.split())
+
+    assert 'value="dobrado" checked' in html
+    assert 'name="angulos_livres" value=""' in html
+
+
+def test_categoria_criada_restringe_o_bloco(logado, catalogo_web):
+    logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "cenario", "texto": "prateleira",
+              "en": "store shelf", "categorias": ["casa"]},
+    )
+
+    parametro = catalogo_web.parametros()[0]
+    assert parametro.categorias == ("casa",)
+
+
+def test_remover_tira_o_valor(logado, catalogo_web):
+    logado.post(
+        "/parametros",
+        data={"tipo": "eixo", "eixo": "cenario", "texto": "varanda", "en": "balcony"},
+    )
+
+    logado.post(
+        "/parametros/remover",
+        data={"tipo": "eixo", "eixo": "cenario", "chave": "varanda"},
+        follow_redirects=False,
+    )
+
+    assert catalogo_web.parametros() == []
+
+
+# --------------------------------------------------------------------- senha
+
+def test_recuperar_e_publico(deslogado):
+    assert deslogado.get("/recuperar").status_code == 200
+
+
+def test_recuperar_nao_revela_se_o_email_existe(deslogado, monkeypatch):
+    """Mensagem diferente por e-mail transformaria a tela num verificador de contas."""
+    chamados = []
+    monkeypatch.setattr(
+        "web.main.auth.pedir_recuperacao", lambda email, url: chamados.append(email)
+    )
+
+    conhecido = deslogado.post("/recuperar", data={"email": "existe@b.c"}).text
+    desconhecido = deslogado.post("/recuperar", data={"email": "nao-existe@b.c"}).text
+
+    assert conhecido == desconhecido
+    assert "Se esse e-mail estiver cadastrado" in conhecido
+    assert chamados == ["existe@b.c", "nao-existe@b.c"]
+
+
+def test_redefinir_e_publico(deslogado):
+    """Quem chega pelo link do e-mail nao tem sessao ainda."""
+    assert deslogado.get("/redefinir").status_code == 200
+
+
+def test_redefinir_sem_token_avisa(deslogado):
+    resposta = deslogado.post(
+        "/redefinir", data={"acesso": "", "refresh": "", "senha": "senha-longa-1",
+                            "senha2": "senha-longa-1"}
+    )
+
+    assert "link inv" in resposta.text
+
+
+def test_redefinir_devolve_o_token_quando_a_senha_nao_confere(deslogado):
+    """Sem devolver, errar a confirmacao obrigaria a pedir outro e-mail."""
+    resposta = deslogado.post(
+        "/redefinir",
+        data={"acesso": "tok-abc", "refresh": "ref-abc",
+              "senha": "senha-longa-1", "senha2": "outra-senha-2"},
+    )
+
+    assert "nao sao iguais" in resposta.text
+    assert 'value="tok-abc"' in resposta.text
+
+
+def test_redefinir_recusa_senha_curta(deslogado):
+    resposta = deslogado.post(
+        "/redefinir", data={"acesso": "t", "senha": "1234", "senha2": "1234"}
+    )
+
+    assert "8 caracteres" in resposta.text
+
+
+def test_redefinir_com_token_valido_loga(deslogado, monkeypatch):
+    monkeypatch.setattr(
+        "web.main.auth.redefinir_com_token",
+        lambda *_: mod_auth.Sessao("novo-at", "novo-rt", "a@b.c"),
+    )
+
+    resposta = deslogado.post(
+        "/redefinir",
+        data={"acesso": "t", "refresh": "r", "senha": "senha-longa-1", "senha2": "senha-longa-1"},
+        follow_redirects=False,
+    )
+
+    assert resposta.status_code == 303
+    assert resposta.headers["location"] == "/"
+    assert mod_auth.COOKIE_ACESSO in resposta.cookies
+
+
+def test_trocar_senha_exige_sessao(deslogado):
+    assert deslogado.get("/senha", follow_redirects=False).status_code == 303
+
+
+def test_trocar_senha_confirma(logado, monkeypatch):
+    monkeypatch.setattr("web.main.auth.trocar_senha", lambda *_: None)
+
+    resposta = logado.post(
+        "/senha", data={"senha": "senha-longa-1", "senha2": "senha-longa-1"}
+    )
+
+    assert "Senha trocada" in resposta.text
+
+
+def test_trocar_senha_recusa_divergente(logado, monkeypatch):
+    def nao_deveria(*_):
+        raise AssertionError("nao pode chamar o Supabase com senha invalida")
+
+    monkeypatch.setattr("web.main.auth.trocar_senha", nao_deveria)
+
+    resposta = logado.post("/senha", data={"senha": "senha-longa-1", "senha2": "diferente-2"})
+
+    assert "nao sao iguais" in resposta.text
+
+
+def test_login_oferece_recuperacao(deslogado):
+    assert 'href="/recuperar"' in deslogado.get("/login").text

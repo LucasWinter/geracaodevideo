@@ -14,6 +14,7 @@ import asyncio
 import os
 import random
 import sys
+from collections.abc import Sequence
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -26,7 +27,14 @@ from gdv import blocos as mod_blocos
 from gdv import briefing as mod_briefing
 from gdv.catalogo import ErroCatalogo
 from gdv.diagnostico import modulo_disponivel
-from gdv.modelos import ANGULOS_SUGERIDOS, EIXOS, STATUS_PRODUTO, Produto
+from gdv.modelos import (
+    ANGULOS_SUGERIDOS,
+    EIXOS,
+    STATUS_PRODUTO,
+    TIPOS_PARAMETRO,
+    Parametro,
+    Produto,
+)
 from gdv.redator import criar_redator
 from gdv.sorteio import EspacoCombinatorioEsgotado, sortear_lote
 
@@ -48,7 +56,7 @@ if ESTATICOS.is_dir():
 
 templates = Jinja2Templates(directory=str(MODELOS))
 
-PUBLICAS = {"/login", "/static", "/favicon.ico", "/saude"}
+PUBLICAS = {"/login", "/static", "/favicon.ico", "/saude", "/recuperar", "/redefinir"}
 
 
 @app.middleware("http")
@@ -81,24 +89,47 @@ def _pagina(request: Request, template: str, **contexto) -> HTMLResponse:
 # texto. Nao pode colidir com categoria de verdade, dai os underscores.
 OUTRA_CATEGORIA = "__outra__"
 
+# Minimo do Supabase e 6; 8 e o que este painel exige, porque a conta e criada
+# com senha padrao e a troca precisa valer alguma coisa.
+MINIMO_SENHA = 8
+
+
+def matriz_de(catalogo) -> mod_blocos.MatrizBlocos:
+    """A matriz do YAML somada aos parametros criados no painel.
+
+    Toda leitura da matriz passa por aqui — briefing, tela de blocos, tela de
+    parametros. Se o site enxergasse uma matriz e a CLI outra, `hash_combinacao`
+    daria valores diferentes e a janela anti-repeticao de um nao veria o outro.
+    """
+    return mod_blocos.mesclar(mod_blocos.carregar(BLOCOS), catalogo.parametros())
+
 
 def opcoes_de_categoria(catalogo) -> list[str]:
-    """Categorias da matriz mais as que ja existem no catalogo.
+    """Categorias da matriz, das criadas no painel e das que ja existem no catalogo.
 
     A matriz manda: valor de bloco com `categorias` so entra no sorteio se casar
     exatamente com a categoria do produto. As do catalogo entram junto para que
     editar um produto antigo nao perca a categoria dele so por ela nao estar no
     blocos.yaml.
     """
+    parametros = catalogo.parametros()
     try:
-        conhecidas = set(mod_blocos.carregar(BLOCOS).categorias())
+        conhecidas = set(mod_blocos.mesclar(mod_blocos.carregar(BLOCOS), parametros).categorias())
     except (mod_blocos.ErroBlocos, OSError):
         # Matriz quebrada nao pode travar o cadastro de produto — /blocos e
         # /briefing ja reportam esse erro com mensagem propria.
         conhecidas = set()
 
+    conhecidas.update(p.texto for p in parametros if p.tipo == "categoria")
     conhecidas.update(p.categoria for p in catalogo.produtos() if p.categoria)
-    return sorted(conhecidas)
+    return sorted(c for c in conhecidas if c)
+
+
+def opcoes_de_angulo(catalogo) -> list[str]:
+    """Os angulos fixos do codigo mais os criados no painel."""
+    extras = [p.texto for p in catalogo.parametros() if p.tipo == "angulo"]
+    vistos = {a.lower() for a in ANGULOS_SUGERIDOS}
+    return list(ANGULOS_SUGERIDOS) + [a for a in extras if a.lower() not in vistos]
 
 
 def normalizar_angulos(marcados: list[str], livres: str) -> list[str]:
@@ -118,13 +149,13 @@ def normalizar_angulos(marcados: list[str], livres: str) -> list[str]:
     return saida
 
 
-def separar_angulos(angulos: list[str]) -> tuple[list[str], str]:
-    """Divide os angulos entre as caixas sugeridas e o campo de texto livre.
+def separar_angulos(angulos: list[str], oferecidos: Sequence[str]) -> tuple[list[str], str]:
+    """Divide os angulos entre as caixas oferecidas e o campo de texto livre.
 
     Comparacao por minusculas: `Frontal` gravado antes precisa marcar a caixa
     `frontal`, senao salvar de novo duplicaria o valor no campo livre.
     """
-    sugeridos = {a.lower() for a in ANGULOS_SUGERIDOS}
+    sugeridos = {a.lower() for a in oferecidos}
     marcados = [a.lower() for a in angulos if a.lower() in sugeridos]
     livres = [a for a in angulos if a.lower() not in sugeridos]
     return marcados, "; ".join(livres)
@@ -166,7 +197,9 @@ def campos_de(produto: Produto | None) -> dict:
 
 
 def _form_produto(request: Request, campos: dict, *, existente: bool, erro: str | None):
-    marcados, livres = separar_angulos(campos["angulos"])
+    catalogo = catalogo_de(request)
+    angulos = opcoes_de_angulo(catalogo)
+    marcados, livres = separar_angulos(campos["angulos"], angulos)
     return _pagina(
         request,
         "produto.html",
@@ -176,8 +209,8 @@ def _form_produto(request: Request, campos: dict, *, existente: bool, erro: str 
         existente=existente,
         erro=erro,
         status_validos=STATUS_PRODUTO,
-        categorias=opcoes_de_categoria(catalogo_de(request)),
-        angulos_sugeridos=ANGULOS_SUGERIDOS,
+        categorias=opcoes_de_categoria(catalogo),
+        angulos_sugeridos=angulos,
         outra_categoria=OUTRA_CATEGORIA,
         hoje=date.today().isoformat(),  # so para o exemplo de nome de arquivo
     )
@@ -237,6 +270,97 @@ def logout():
     return resposta
 
 
+# ------------------------------------------------------------------ senha
+
+def _senha_fraca(nova: str, repetida: str) -> str | None:
+    if nova != repetida:
+        return "as duas senhas nao sao iguais"
+    if len(nova) < MINIMO_SENHA:
+        return f"a senha precisa de pelo menos {MINIMO_SENHA} caracteres"
+    return None
+
+
+@app.get("/recuperar", response_class=HTMLResponse)
+def form_recuperar(request: Request):
+    return _pagina(request, "recuperar.html", enviado=False, erro=None)
+
+
+@app.post("/recuperar", response_class=HTMLResponse)
+def pedir_recuperacao(request: Request, email: str = Form(...)):
+    """Sempre responde a mesma coisa, exista o e-mail ou nao.
+
+    Dizer "esse e-mail nao existe" transformaria a tela num verificador de quem
+    tem conta. O Supabase so envia para quem esta cadastrado, entao o "so para
+    usuarios da base" e garantido pelo servidor, nao pela mensagem.
+    """
+    auth.pedir_recuperacao(email.strip(), str(request.url_for("form_redefinir")))
+    return _pagina(request, "recuperar.html", enviado=True, erro=None)
+
+
+@app.get("/redefinir", response_class=HTMLResponse, name="form_redefinir")
+def form_redefinir(request: Request):
+    """O token vem no fragmento da URL, que o navegador nao manda ao servidor.
+
+    Por isso a pagina e servida vazia e o JS copia o fragmento para o formulario
+    antes do envio.
+    """
+    return _pagina(request, "redefinir.html", erro=None, acesso="", refresh="")
+
+
+@app.post("/redefinir")
+def aplicar_redefinicao(
+    request: Request,
+    acesso: str = Form(""),
+    refresh: str = Form(""),
+    senha: str = Form(...),
+    senha2: str = Form(...),
+):
+    def recusar(mensagem: str):
+        """Devolve o token junto: o fragmento da URL ja foi consumido, e sem ele
+        a pessoa teria que pedir outro e-mail so porque errou a confirmacao."""
+        return _pagina(
+            request, "redefinir.html", erro=mensagem, acesso=acesso, refresh=refresh
+        )
+
+    problema = _senha_fraca(senha, senha2)
+    if problema:
+        return recusar(problema)
+    if not acesso:
+        return recusar("link invalido — abra o do e-mail de novo")
+
+    try:
+        sessao = auth.redefinir_com_token(acesso, refresh, senha)
+    except auth.ErroAutenticacao as exc:
+        return recusar(str(exc))
+
+    resposta = RedirectResponse("/", status_code=303)
+    auth.gravar_cookies(resposta, sessao)
+    return resposta
+
+
+@app.get("/senha", response_class=HTMLResponse)
+def form_senha(request: Request):
+    return _pagina(request, "senha.html", erro=None, trocada=False)
+
+
+@app.post("/senha", response_class=HTMLResponse)
+def trocar_senha(request: Request, senha: str = Form(...), senha2: str = Form(...)):
+    problema = _senha_fraca(senha, senha2)
+    if problema:
+        return _pagina(request, "senha.html", erro=problema, trocada=False)
+
+    try:
+        auth.trocar_senha(
+            request.cookies.get(auth.COOKIE_ACESSO, ""),
+            request.cookies.get(auth.COOKIE_REFRESH, ""),
+            senha,
+        )
+    except auth.ErroAutenticacao as exc:
+        return _pagina(request, "senha.html", erro=str(exc), trocada=False)
+
+    return _pagina(request, "senha.html", erro=None, trocada=True)
+
+
 # ------------------------------------------------------------------ briefing
 
 QTDS_BRIEFING = (1, 2, 3, 5, 8, 10, 15, 20)
@@ -284,7 +408,7 @@ async def gerar_briefing(request: Request, qtd: int = Form(5)):
         )
 
     try:
-        matriz = mod_blocos.carregar(BLOCOS)
+        matriz = matriz_de(catalogo)
         produtos = mod_briefing.selecionar_produtos(
             catalogo.produtos_ativos(), catalogo.contagem_por_sku(), max(1, min(qtd, 20))
         )
@@ -413,6 +537,105 @@ def salvar_produto(
 
 @app.get("/blocos", response_class=HTMLResponse)
 def ver_blocos(request: Request):
-    """So leitura: a matriz e versionada no repositorio, editada no blocos.yaml."""
-    matriz = mod_blocos.carregar(BLOCOS)
-    return _pagina(request, "blocos.html", matriz=matriz, eixos=EIXOS)
+    """So leitura. Para acrescentar valor sem deploy, a tela e /parametros."""
+    catalogo = catalogo_de(request)
+    matriz = matriz_de(catalogo)
+    do_painel = {
+        (p.eixo, p.chave) for p in catalogo.parametros() if p.tipo == "eixo"
+    }
+    return _pagina(request, "blocos.html", matriz=matriz, eixos=EIXOS, do_painel=do_painel)
+
+
+# ---------------------------------------------------------------- parametros
+
+@app.get("/parametros", response_class=HTMLResponse)
+def ver_parametros(request: Request):
+    catalogo = catalogo_de(request)
+    parametros = catalogo.parametros()
+    try:
+        matriz = mod_blocos.carregar(BLOCOS)
+    except (mod_blocos.ErroBlocos, OSError):
+        matriz = None
+
+    return _pagina(
+        request,
+        "parametros.html",
+        parametros=parametros,
+        eixos=EIXOS,
+        # Um valor existente por eixo, para o formulario mostrar o estilo de
+        # descritor em ingles que funciona — copiar um modelo e mais facil que
+        # adivinhar o que o Veo entende.
+        exemplos={
+            eixo: matriz.eixos[eixo][0] for eixo in EIXOS
+        } if matriz else {},
+        categorias=opcoes_de_categoria(catalogo),
+        erro=request.query_params.get("erro"),
+    )
+
+
+@app.post("/parametros")
+def criar_parametro(
+    request: Request,
+    tipo: str = Form(...),
+    eixo: str = Form(""),
+    texto: str = Form(...),
+    en: str = Form(""),
+    categorias: list[str] = Form(default=[]),
+):
+    catalogo = catalogo_de(request)
+
+    def recusar(mensagem: str):
+        return RedirectResponse(f"/parametros?erro={mensagem}", status_code=303)
+
+    if tipo not in TIPOS_PARAMETRO:
+        return recusar(f"tipo invalido: {tipo}")
+
+    texto = texto.strip()
+    if not texto:
+        return recusar("o texto e obrigatorio")
+
+    eixo = eixo.strip() if tipo == "eixo" else ""
+    if tipo == "eixo":
+        if eixo not in EIXOS:
+            return recusar(f"eixo invalido: {eixo}")
+        if not en.strip():
+            return recusar("o descritor em ingles e obrigatorio para valor de eixo")
+
+    chave = mod_blocos.chave_de(texto)
+    if not chave:
+        return recusar("o texto precisa ter letras ou numeros")
+
+    try:
+        catalogo.salvar_parametro(
+            Parametro(
+                tipo=tipo,
+                eixo=eixo,
+                chave=chave,
+                texto=texto,
+                en=en.strip(),
+                # Sem categoria marcada o valor serve todo produto, igual ao YAML.
+                categorias=tuple(c.strip().lower() for c in categorias if c.strip()),
+            )
+        )
+    except ErroCatalogo as exc:
+        return recusar(str(exc))
+
+    return RedirectResponse("/parametros", status_code=303)
+
+
+@app.post("/parametros/remover")
+def remover_parametro(
+    request: Request, tipo: str = Form(...), eixo: str = Form(""), chave: str = Form(...)
+):
+    """Remover so tira o valor do sorteio dali para a frente.
+
+    Video ja gerado com ele continua valido: o hash guardado no log e um texto,
+    nao uma referencia. O que nao pode e renomear a chave.
+    """
+    catalogo = catalogo_de(request)
+    try:
+        catalogo.remover_parametro(tipo, eixo, chave)
+    except ErroCatalogo as exc:
+        return RedirectResponse(f"/parametros?erro={exc}", status_code=303)
+
+    return RedirectResponse("/parametros", status_code=303)

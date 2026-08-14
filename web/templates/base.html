@@ -17,12 +17,18 @@
   <header class="topo">
     <a href="/" class="marca">gdv</a>
     <nav aria-label="Seções">
-      {% for href, rotulo in [('/', 'Briefing'), ('/catalogo', 'Catálogo'), ('/blocos', 'Matriz')] %}
+      {% for href, rotulo in [
+        ('/', 'Briefing'), ('/catalogo', 'Catálogo'),
+        ('/parametros', 'Parâmetros'), ('/blocos', 'Matriz')
+      ] %}
       {% set ativo = (secao == href) if href == '/' else secao.startswith(href) %}
       <a href="{{ href }}" {% if ativo %}aria-current="page"{% endif %}>{{ rotulo }}</a>
       {% endfor %}
     </nav>
-    <form method="post" action="/logout" class="sair"><button class="link">sair</button></form>
+    <div class="sair">
+      <a href="/senha" class="link" title="Trocar senha">senha</a>
+      <form method="post" action="/logout"><button class="link">sair</button></form>
+    </div>
   </header>
   {% endif %}
 
@@ -61,6 +67,11 @@
       botao.textContent = botao.dataset.aguardando || 'enviando…';
       botao.disabled = true;
     });
+
+    // Com a barra rolando no celular, a aba em que voce esta pode nascer fora
+    // da area visivel — a pagina parecia nao ter aba nenhuma selecionada.
+    const abaAtual = document.querySelector('.topo nav a[aria-current="page"]');
+    if (abaAtual) abaAtual.scrollIntoView({ inline: 'center', block: 'nearest' });
 
     // Voltar pelo historico restaura a pagina do cache com o botao ainda
     // desabilitado; sem isto o formulario fica morto.

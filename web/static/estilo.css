@@ -218,8 +218,16 @@ tbody tr:hover td { background: var(--superficie-2); }
 
 /* -------------------------------------------------------------- formulario */
 
-.formulario { display: grid; gap: 1rem; max-width: 520px; }
+/* `minmax(0, 1fr)` e `min-width: 0` sao o que impede a coluna de crescer ate o
+   conteudo: item de grid tem min-width auto, entao um <select> com opcao longa
+   ("Valor de um eixo da matriz (cenário, câmera…)") esticava o formulario para
+   alem da tela e criava rolagem horizontal no celular. */
+.formulario {
+  display: grid; gap: 1rem; max-width: 520px;
+  grid-template-columns: minmax(0, 1fr);
+}
 .formulario label { display: grid; gap: .3rem; font-size: .9rem; color: var(--discreto); }
+.formulario input, .formulario select, .formulario textarea { min-width: 0; }
 .formulario input, .formulario select {
   /* 1rem e obrigatorio: abaixo de 16px o Safari do iPhone da zoom sozinho ao
      focar o campo e a pessoa perde o enquadramento da pagina. */
@@ -383,3 +391,23 @@ details pre { white-space: pre-wrap; word-break: break-all; font-size: .8rem; }
   html { scroll-behavior: auto; }
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ------------------------------------------------------ senha e parametros */
+
+.topo .sair { display: flex; align-items: center; gap: .25rem; margin-left: auto; }
+.topo .sair a.link { text-decoration: none; }
+
+.aviso {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid var(--ok); color: var(--ok);
+  padding: .6rem .8rem; border-radius: var(--raio);
+}
+
+/* O formulario de parametros vive dentro de um card, que ja tem a moldura. */
+.card > .formulario { max-width: none; }
+.exemplos summary { font-size: .85rem; }
+.exemplos .meta { margin-top: .5rem; font-size: .82rem; }
+.exemplos code { color: var(--destaque); }
+
+/* Botao de remover dentro da tabela nao pode esticar a linha. */
+.tabela-cartoes td form { margin: 0; }

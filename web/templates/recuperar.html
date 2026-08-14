@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% set mostrar_nav = false %}
+{% block titulo %}Recuperar senha{% endblock %}
+
+{% block conteudo %}
+<div class="login">
+  <h1>gdv</h1>
+  <p class="discreto">Recuperar senha</p>
+
+  {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+  {% if enviado %}
+    <p class="aviso" role="status">
+      Se esse e-mail estiver cadastrado, o link de redefinição já saiu. Confira a
+      caixa de entrada e o spam.
+    </p>
+    <p class="discreto">
+      O link vale por uma hora e só pode ser usado uma vez. Não chegou? Fale com
+      quem administra o painel — ele consegue redefinir sua senha direto.
+    </p>
+    <p><a href="/login" class="botao">Voltar ao login</a></p>
+  {% else %}
+    <p class="discreto">
+      Só funciona para e-mail já cadastrado no painel. Contas são criadas por
+      quem administra — esta tela não cria conta nova.
+    </p>
+
+    <form method="post" action="/recuperar" class="formulario">
+      <label>
+        E-mail
+        <input name="email" type="email" autocomplete="username" required autofocus>
+      </label>
+      <button class="primario" data-aguardando="enviando…">Enviar link</button>
+    </form>
+
+    <p class="discreto"><a href="/login">Voltar ao login</a></p>
+  {% endif %}
+</div>
+{% endblock %}

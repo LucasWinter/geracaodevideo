@@ -43,6 +43,30 @@ class Produto:
     status: str
 
 
+TIPOS_PARAMETRO = ("eixo", "categoria", "angulo")
+
+
+@dataclass(frozen=True)
+class Parametro:
+    """Opcao criada pelo painel, somada as que vem do `data/blocos.yaml`.
+
+    O YAML continua sendo a base versionada. Esta tabela existe para o time
+    conseguir ampliar a matriz sem editar arquivo e refazer deploy.
+
+    `chave` e o id estavel: para `tipo="eixo"` ela entra no hash de combinacao
+    exatamente como o `id` do YAML, entao nao pode ser renomeada depois de
+    sorteada. Por isso o formulario a deriva do texto uma vez e nao deixa editar.
+    """
+
+    tipo: str
+    chave: str
+    texto: str
+    eixo: str = ""  # so preenchido quando tipo == "eixo"
+    en: str = ""
+    categorias: tuple[str, ...] = ()
+    extras: dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class ValorBloco:
     """Um valor sorteavel de um eixo da matriz."""

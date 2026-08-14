@@ -17,10 +17,11 @@ from collections import Counter
 from typing import Any
 
 from .catalogo import ErroCatalogo
-from .modelos import STATUS_VIDEO, Produto, RegistroVideo
+from .modelos import STATUS_VIDEO, Parametro, Produto, RegistroVideo
 
 TABELA_PRODUTOS = "produtos"
 TABELA_VIDEOS = "videos"
+TABELA_PARAMETROS = "parametros"
 
 
 def criar_cliente(
@@ -119,6 +120,57 @@ class CatalogoSupabase:
             pasta_drive=linha.get("pasta_drive") or "",
             angulos=list(linha.get("angulos") or []),
             status=linha["status"],
+        )
+
+    # -------------------------------------------------------------- parametros
+
+    def parametros(self) -> list[Parametro]:
+        return [
+            self._para_parametro(l) for l in self._selecionar(TABELA_PARAMETROS, ordem="id")
+        ]
+
+    def salvar_parametro(self, parametro: Parametro) -> None:
+        """Upsert por (tipo, eixo, chave) — a mesma chave unica do banco.
+
+        Nao existe no backend CSV: parametro e criado pelo painel, igual produto.
+        """
+        self._executar(
+            lambda: self.cliente.table(TABELA_PARAMETROS)
+            .upsert(
+                {
+                    "tipo": parametro.tipo,
+                    "eixo": parametro.eixo,
+                    "chave": parametro.chave,
+                    "texto": parametro.texto,
+                    "en": parametro.en,
+                    "categorias": list(parametro.categorias),
+                    "extras": parametro.extras,
+                },
+                on_conflict="tipo,eixo,chave",
+            )
+            .execute()
+        )
+
+    def remover_parametro(self, tipo: str, eixo: str, chave: str) -> None:
+        self._executar(
+            lambda: self.cliente.table(TABELA_PARAMETROS)
+            .delete()
+            .eq("tipo", tipo)
+            .eq("eixo", eixo)
+            .eq("chave", chave)
+            .execute()
+        )
+
+    @staticmethod
+    def _para_parametro(linha: dict[str, Any]) -> Parametro:
+        return Parametro(
+            tipo=linha["tipo"],
+            eixo=linha.get("eixo") or "",
+            chave=linha["chave"],
+            texto=linha["texto"],
+            en=linha.get("en") or "",
+            categorias=tuple(linha.get("categorias") or []),
+            extras=dict(linha.get("extras") or {}),
         )
 
     # ------------------------------------------------------------------ videos

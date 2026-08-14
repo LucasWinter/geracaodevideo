@@ -66,6 +66,53 @@ def entrar(email: str, senha: str) -> Sessao:
     )
 
 
+def pedir_recuperacao(email: str, url_retorno: str) -> None:
+    """Dispara o e-mail de redefinicao do Supabase.
+
+    Nao devolve nada e nao distingue e-mail cadastrado de inexistente — de
+    proposito. Responder "esse e-mail nao existe" transformaria a tela num
+    verificador de quem tem conta. O Supabase so envia para quem existe, entao a
+    exigencia de "so para usuarios cadastrados" ja esta atendida pelo servidor.
+    """
+    cliente = _novo_cliente()
+    try:
+        cliente.auth.reset_password_for_email(email, {"redirect_to": url_retorno})
+    except Exception:
+        # Falha de SMTP tambem fica silenciosa aqui pelo mesmo motivo; o log da
+        # Vercel guarda o erro para quem for depurar.
+        pass
+
+
+def redefinir_com_token(acesso: str, refresh: str, nova_senha: str) -> Sessao:
+    """Troca a senha usando o token que veio no link do e-mail."""
+    cliente = _novo_cliente()
+    try:
+        cliente.auth.set_session(acesso, refresh or "")
+        resposta = cliente.auth.update_user({"password": nova_senha})
+    except Exception as exc:
+        raise ErroAutenticacao(
+            "link expirado ou ja usado — peca a recuperacao de novo"
+        ) from exc
+
+    usuario = getattr(resposta, "user", None)
+    return Sessao(acesso, refresh, getattr(usuario, "email", "") or "")
+
+
+def trocar_senha(acesso: str, refresh: str, nova_senha: str) -> None:
+    """Troca a senha de quem ja esta logado.
+
+    E o caminho do time: o admin cria a conta com senha padrao, a pessoa entra e
+    troca aqui — sem depender de e-mail, que no Supabase gratuito tem limite
+    apertado de envio.
+    """
+    cliente = _novo_cliente()
+    try:
+        cliente.auth.set_session(acesso, refresh or "")
+        cliente.auth.update_user({"password": nova_senha})
+    except Exception as exc:
+        raise ErroAutenticacao(f"nao foi possivel trocar a senha: {exc}") from exc
+
+
 def gravar_cookies(resposta: Response, sessao: Sessao) -> None:
     comum = {
         "httponly": True,

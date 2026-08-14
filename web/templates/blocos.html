@@ -7,9 +7,9 @@
 </div>
 
 <p class="vazio">
-  Só leitura. A matriz é versionada no repositório — para mudar, edite
-  <code>data/blocos.yaml</code> e faça deploy. Adicionar um valor aqui
-  multiplica o espaço de combinações sem tocar em código.
+  Só leitura, e é a matriz completa: o que vem do <code>data/blocos.yaml</code>
+  versionado mais o que foi criado em <a href="/parametros">Parâmetros</a>, que é
+  onde se adiciona valor sem deploy. Os criados pelo painel aparecem marcados.
 </p>
 
 <nav class="atalhos" aria-label="Ir para um eixo">
@@ -25,7 +25,12 @@
       <tbody>
         {% for valor in matriz.eixos[eixo] %}
         <tr>
-          <td data-rotulo="id"><code>{{ valor.id }}</code></td>
+          <td data-rotulo="id">
+            <code>{{ valor.id }}</code>
+            {% if (eixo, valor.id) in do_painel %}
+            <span class="etiqueta">painel</span>
+            {% endif %}
+          </td>
           <td data-rotulo="texto" class="livre">{{ valor.texto }}</td>
           <td data-rotulo="categorias">{{ valor.categorias|join(', ') if valor.categorias else 'todas' }}</td>
         </tr>

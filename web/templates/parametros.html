@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block titulo %}Parâmetros{% endblock %}
+
+{% block conteudo %}
+<div class="cabecalho">
+  <h1>Parâmetros</h1>
+</div>
+
+<p class="vazio">
+  O que você adiciona aqui entra no sorteio na hora — sem editar arquivo, sem
+  deploy. A base continua sendo o <code>data/blocos.yaml</code> versionado; esta
+  tela soma valores a ele. Cada valor novo de eixo <strong>multiplica</strong> o
+  espaço de combinações: um cenário a mais em cinco vira seis vezes o total.
+</p>
+
+{% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+
+<article class="card">
+  <header><h2>Adicionar</h2></header>
+
+  <form method="post" action="/parametros" class="formulario">
+    <label for="tipo">
+      O que você quer adicionar
+      <select id="tipo" name="tipo" required>
+        <option value="eixo" selected>Valor de um eixo da matriz (cenário, câmera…)</option>
+        <option value="categoria">Categoria de produto</option>
+        <option value="angulo">Ângulo de foto do produto</option>
+      </select>
+    </label>
+
+    <div id="campos-eixo">
+      <label for="eixo">
+        Em qual eixo
+        <select id="eixo" name="eixo">
+          {% for nome in eixos %}
+          <option value="{{ nome }}">{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <label>
+      Texto em português
+      <input name="texto" required placeholder="varanda ao entardecer">
+      <small id="dica-texto">Aparece no briefing e vira o id do valor.</small>
+    </label>
+
+    <div id="campos-en">
+      <label>
+        Descritor em inglês
+        <input name="en" placeholder="apartment balcony at dusk, warm city lights out of focus">
+        <small>
+          É este texto que compõe o prompt do Veo — o modelo responde bem melhor
+          em inglês. Escreva a cena, não o nome dela.
+        </small>
+      </label>
+
+      <details class="exemplos">
+        <summary>Ver como estão escritos os que já existem</summary>
+        <ul class="meta">
+          {% for nome, valor in exemplos.items() %}
+          <li><code>{{ nome }}</code> — <span class="discreto">{{ valor.en }}</span></li>
+          {% endfor %}
+        </ul>
+      </details>
+
+      <fieldset class="caixas">
+        <legend>Restringir a categorias</legend>
+        <p class="nota">
+          Sem nada marcado, o valor serve qualquer produto. Marque só se ele não
+          fizer sentido para todos — "provando no espelho" não serve para caneca.
+        </p>
+        <div class="grade-caixas">
+          {% for categoria in categorias %}
+          <label class="caixa">
+            <input type="checkbox" name="categorias" value="{{ categoria }}">
+            <span>{{ categoria }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </div>
+
+    <button class="primario" data-aguardando="salvando…">Adicionar</button>
+  </form>
+</article>
+
+<article class="card">
+  <header>
+    <h2>Criados aqui</h2>
+    <span class="etiqueta">{{ parametros|length }}</span>
+  </header>
+
+  {% if not parametros %}
+  <p class="vazio">
+    Nada ainda. Tudo que o sorteio usa hoje vem do <code>blocos.yaml</code> —
+    veja em <a href="/blocos">Matriz</a>.
+  </p>
+  {% else %}
+  <div class="tabela-rolagem">
+    <table class="tabela-cartoes">
+      <thead>
+        <tr><th>tipo</th><th>texto</th><th>id</th><th>categorias</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for p in parametros %}
+        <tr>
+          <td data-rotulo="Tipo">
+            {% if p.tipo == 'eixo' %}<code>{{ p.eixo }}</code>{% else %}{{ p.tipo }}{% endif %}
+          </td>
+          <td data-rotulo="Texto" class="livre">{{ p.texto }}</td>
+          <td data-rotulo="id"><code>{{ p.chave }}</code></td>
+          <td data-rotulo="Categorias">{{ p.categorias|join(', ') if p.categorias else 'todas' }}</td>
+          <td data-rotulo="">
+            <form method="post" action="/parametros/remover">
+              <input type="hidden" name="tipo" value="{{ p.tipo }}">
+              <input type="hidden" name="eixo" value="{{ p.eixo }}">
+              <input type="hidden" name="chave" value="{{ p.chave }}">
+              <button data-aguardando="removendo…">remover</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="rodape">
+    Remover só tira o valor dos sorteios daqui para a frente. Vídeo já gerado com
+    ele continua válido — o hash guardado no log é texto, não referência. O que
+    nunca se deve fazer é recriar um valor com o mesmo texto de um removido e
+    esperar que conte como combinação nova: o id sai igual, e a janela de
+    anti-repetição vai reconhecê-lo.
+  </p>
+  {% endif %}
+</article>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Categoria e angulo nao tem eixo nem descritor em ingles — pedir os dois
+  // faria a pessoa preencher campo que nao vai a lugar nenhum.
+  const tipo = document.getElementById('tipo');
+  const camposEixo = document.getElementById('campos-eixo');
+  const camposEn = document.getElementById('campos-en');
+  const entradaEn = camposEn.querySelector('input[name=en]');
+  const dica = document.getElementById('dica-texto');
+
+  const DICAS = {
+    eixo: 'Aparece no briefing e vira o id do valor.',
+    categoria: 'Vira opção no campo Categoria do cadastro de produto.',
+    angulo: 'Vira uma caixa de seleção em "Ângulos que você tem".',
+  };
+
+  function sincronizar() {
+    const eEixo = tipo.value === 'eixo';
+    camposEixo.hidden = !eEixo;
+    camposEn.hidden = !eEixo;
+    entradaEn.required = eEixo;
+    dica.textContent = DICAS[tipo.value];
+  }
+
+  tipo.addEventListener('change', sincronizar);
+  sincronizar();
+</script>
+{% endblock %}

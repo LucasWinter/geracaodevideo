@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from .modelos import EIXOS, ValorBloco
+from .modelos import EIXOS, Parametro, ValorBloco
 
 CHAVES_RESERVADAS = {"id", "texto", "en", "categorias"}
 
@@ -42,6 +45,49 @@ class MatrizBlocos:
         for eixo in self.eixos:
             total *= len(self.compativeis(eixo, categoria))
         return total
+
+
+def chave_de(texto: str) -> str:
+    """Deriva um id estavel a partir do texto digitado no painel.
+
+    Sem acento, sem espaco, minusculo — o mesmo formato dos ids do YAML, porque
+    os dois vao para o mesmo lugar: a assinatura que vira hash de combinacao.
+    """
+    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    limpo = re.sub(r"[^a-z0-9]+", "_", sem_acento.lower()).strip("_")
+    return limpo[:48]
+
+
+def mesclar(matriz: MatrizBlocos, parametros: Sequence[Parametro]) -> MatrizBlocos:
+    """Soma a matriz do YAML os valores de eixo criados no painel.
+
+    O YAML ganha em caso de empate de id: ele e versionado e revisado, a tabela
+    e editavel por qualquer pessoa do time. Parametro de eixo desconhecido e
+    ignorado em vez de derrubar o briefing — um eixo removido do codigo nao pode
+    quebrar a geracao do dia.
+    """
+    eixos = {eixo: list(valores) for eixo, valores in matriz.eixos.items()}
+
+    for parametro in parametros:
+        if parametro.tipo != "eixo" or parametro.eixo not in eixos:
+            continue
+        if any(v.id == parametro.chave for v in eixos[parametro.eixo]):
+            continue
+
+        eixos[parametro.eixo].append(
+            ValorBloco(
+                eixo=parametro.eixo,
+                id=parametro.chave,
+                texto=parametro.texto,
+                # Sem descritor em ingles o prompt do Veo perde qualidade, mas
+                # cair para o portugues e melhor que sortear um valor vazio.
+                en=parametro.en or parametro.texto,
+                categorias=tuple(parametro.categorias),
+                extras=dict(parametro.extras),
+            )
+        )
+
+    return MatrizBlocos(eixos=eixos, termos_proibidos=matriz.termos_proibidos)
 
 
 def carregar(caminho: Path | str = "data/blocos.yaml") -> MatrizBlocos:

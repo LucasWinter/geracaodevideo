@@ -35,7 +35,12 @@ def _carregar_dotenv(caminho: Path = Path(".env")) -> None:
 
 def cmd_briefing(args: argparse.Namespace) -> int:
     catalogo = abrir_catalogo(args.dados)
-    matriz = mod_blocos.carregar(Path(args.dados) / "blocos.yaml")
+    # Mesma matriz que o painel monta: YAML mais os parametros criados no site.
+    # Se as duas divergissem, `hash_combinacao` daria valores diferentes e a
+    # janela anti-repeticao de uma nao enxergaria o que a outra gerou.
+    matriz = mod_blocos.mesclar(
+        mod_blocos.carregar(Path(args.dados) / "blocos.yaml"), catalogo.parametros()
+    )
     redator = criar_redator(matriz.termos_proibidos, forcar_template=args.sem_llm)
 
     data = args.data or date.today().isoformat()

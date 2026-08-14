@@ -1,7 +1,7 @@
 """Cliente Supabase falso, em memoria — os testes nao tocam a rede.
 
 Implementa so o pedaco do encadeamento postgrest que `CatalogoSupabase` usa:
-table().select()/insert()/update()/upsert().eq().order().limit().execute().
+table().select()/insert()/update()/upsert()/delete().eq().order().limit().execute().
 """
 
 from __future__ import annotations
@@ -42,6 +42,10 @@ class ConsultaFalsa:
         return all(str(linha.get(coluna)) == str(valor) for coluna, valor in self.filtros)
 
     def execute(self) -> Resposta:
+        if self.operacao == "delete":
+            apagadas = [dict(l) for l in self.tabela.linhas if self._casam(l)]
+            self.tabela.linhas = [l for l in self.tabela.linhas if not self._casam(l)]
+            return Resposta(apagadas)
         if self.operacao == "insert":
             return Resposta(self.tabela.inserir(self.carga))
         if self.operacao == "upsert":
@@ -61,9 +65,15 @@ class ConsultaFalsa:
 
 
 class TabelaFalsa:
-    def __init__(self, nome: str, chave: str) -> None:
+    def __init__(
+        self, nome: str, chave: str | tuple[str, ...], autonumera: bool = False
+    ) -> None:
         self.nome = nome
-        self.chave = chave
+        # Tupla quando a unicidade e composta, como em parametros.
+        self.chave = chave if isinstance(chave, tuple) else (chave,)
+        # Espelha a coluna identity do Postgres. Sem isso, ordenar por "id" no
+        # falso compararia None com None e estouraria.
+        self.autonumera = autonumera
         self.linhas: list[dict[str, Any]] = []
         self.sequencia = itertools.count(1)
 
@@ -73,19 +83,24 @@ class TabelaFalsa:
     def insert(self, carga: Any) -> ConsultaFalsa:
         return ConsultaFalsa(self, "insert", carga)
 
-    def upsert(self, carga: Any) -> ConsultaFalsa:
+    def upsert(self, carga: Any, on_conflict: str | None = None) -> ConsultaFalsa:
         return ConsultaFalsa(self, "upsert", carga)
 
     def update(self, carga: Any) -> ConsultaFalsa:
         return ConsultaFalsa(self, "update", carga)
+
+    def delete(self) -> ConsultaFalsa:
+        return ConsultaFalsa(self, "delete")
+
+    def _identidade(self, item: dict[str, Any]) -> tuple:
+        return tuple(item.get(coluna) for coluna in self.chave)
 
     def inserir(self, carga: Any) -> list[dict[str, Any]]:
         itens = carga if isinstance(carga, list) else [carga]
         criadas = []
         for item in itens:
             linha = dict(item)
-            if self.chave == "id":
-                # Espelha a identity do Postgres: quem numera e o banco.
+            if self.autonumera:
                 linha["id"] = next(self.sequencia)
                 linha.setdefault("criado_em", f"2026-08-12T00:00:{linha['id']:02d}Z")
             self.linhas.append(linha)
@@ -97,14 +112,17 @@ class TabelaFalsa:
         salvas = []
         for item in itens:
             existente = next(
-                (l for l in self.linhas if l.get(self.chave) == item.get(self.chave)), None
+                (l for l in self.linhas if self._identidade(l) == self._identidade(item)), None
             )
             if existente:
                 existente.update(item)
                 salvas.append(dict(existente))
             else:
-                self.linhas.append(dict(item))
-                salvas.append(dict(item))
+                linha = dict(item)
+                if self.autonumera:
+                    linha["id"] = next(self.sequencia)
+                self.linhas.append(linha)
+                salvas.append(dict(linha))
         return salvas
 
 
@@ -112,7 +130,10 @@ class ClienteFalso:
     def __init__(self) -> None:
         self.tabelas = {
             "produtos": TabelaFalsa("produtos", "sku"),
-            "videos": TabelaFalsa("videos", "id"),
+            "videos": TabelaFalsa("videos", "id", autonumera=True),
+            "parametros": TabelaFalsa(
+                "parametros", ("tipo", "eixo", "chave"), autonumera=True
+            ),
         }
 
     def table(self, nome: str) -> TabelaFalsa:
